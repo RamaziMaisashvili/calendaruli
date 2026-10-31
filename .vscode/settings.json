@@ -1,0 +1,4 @@
+{
+    "git-graph.dialog.applyStash.reinstateIndex": false,
+    "git-graph.dialog.cherryPick.noCommit": false
+}

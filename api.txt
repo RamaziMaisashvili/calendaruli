@@ -1,0 +1,20 @@
+OK: HTTPS certificate hostname and trust verified
+საქაღალდე: /var/www/app/api
+მომხმარებელი: apisiteu
+სერვისი: python-site-api
+შიდა პორტი: 8100
+faceef400b20dd1f934f6ee3dfb1194e
+შექმნილია: api.learn.net.ge
+კოდი ატვირთე: /var/www/app/api/app
+მონაცემები: /var/www/app/api/access-info.txt
+კოდის ატვირთვის შემდეგ: sudo systemctl restart python-site-api
+ბიბლიოთეკების დაყენება: sudo chroot --userspec=1011:1011 --groups=33 /var/www/app/api /venv/bin/python -m pip --isolated install --only-binary=:all: -r /app/requirements.txt
+usr/lib/venv და სხვა runtime ფაილები ამ საიტის იზოლირებული ასლებია; არ წაშალო.
+წასაშლელად გამოიყენე remove_python_site.sh.
+მზადაა: https://api.learn.net.ge
+
+DB_HOST =  "127.0.0.1"
+DB_PORT = int( "3306")
+DB_NAME =  "api_site_calendar_api"
+DB_USER = "api_site"
+DB_PASSWORD = "Manchvi22!"

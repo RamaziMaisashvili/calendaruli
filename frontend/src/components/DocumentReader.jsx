@@ -148,6 +148,27 @@ export default function DocumentReader({ file, moduleData, onClose }) {
   const hasModule = moduleData?.has_module;
   const docElements = moduleData?.doc_elements || [];
 
+  // ორგანიზაციის იდენტიფიკაცია: 22-ე საჯარო სკოლა vs WEA აკადემია
+  const is22School = useMemo(() => {
+    if (moduleData?.organization_code === '22_skola' || file?.organization_code === '22_skola') return true;
+    const name = (file?.original_name || '').toLowerCase();
+    if (name.includes('22') || name.includes('ქსელ') || name.includes('ქუთაის') || name.includes('გოქაძ')) return true;
+    if (docElements && docElements.some(el => {
+      const txt = (el.text || '').toLowerCase();
+      return txt.includes('22') || txt.includes('გოქაძ') || txt.includes('ქუთაის');
+    })) return true;
+    return false;
+  }, [moduleData, file, docElements]);
+
+  const hasWeaBanner = useMemo(() => {
+    if (is22School) return false;
+    if (moduleData?.has_wea_banner === true || file?.has_wea_banner === true) return true;
+    if (moduleData?.organization_code === 'wea' || file?.organization_code === 'wea') return true;
+    const name = (file?.original_name || '').toLowerCase();
+    if (name.includes('wea') || name.includes('front-end') || name.includes('frontend') || name.includes('აკადემი')) return true;
+    return false;
+  }, [is22School, moduleData, file]);
+
   const isMarkupModule = Boolean(
     file?.original_name?.includes('მარკირება') || 
     file?.original_name?.includes('დანართი 1') ||
@@ -269,7 +290,17 @@ export default function DocumentReader({ file, moduleData, onClose }) {
             <span className="word-doc-title" title={file.original_name}>
               {file.original_name}
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
+              {is22School ? (
+                <span className="org-badge org-22" title="სსიპ - ნესტორ გოქაძის სახელობის ქალაქ ქუთაისის N 22 საჯარო სკოლა">
+                  🏫 22-ე საჯარო სკოლა
+                </span>
+              ) : hasWeaBanner ? (
+                <span className="org-badge org-wea" title="შპს მსოფლიო განათლების აკადემია (WEA)">
+                  🌐 WEA აკადემია
+                </span>
+              ) : null}
+
               {isCurriculumPlan ? (
                 <>
                   <span className="module-badge-tag integrated-tag">
@@ -736,13 +767,42 @@ export default function DocumentReader({ file, moduleData, onClose }) {
                     <tr>
                       <td>
                         <div className="hdr">
-                          <p style={{ textAlign: "left", lineHeight: "normal", margin: 0 }}>
-                            <img
-                              src={LETTERHEAD_BASE64}
-                              alt=""
-                              style={{ width: "648pt", height: "62.2pt", verticalAlign: "baseline" }}
-                            />
-                          </p>
+                          {hasWeaBanner ? (
+                            <p style={{ textAlign: "left", lineHeight: "normal", margin: 0 }}>
+                              <img
+                                src={LETTERHEAD_BASE64}
+                                alt="WEA Letterhead"
+                                style={{ width: "648pt", height: "62.2pt", verticalAlign: "baseline" }}
+                              />
+                            </p>
+                          ) : is22School ? (
+                            <div style={{
+                              paddingTop: "20pt",
+                              paddingBottom: "10pt",
+                              marginBottom: "12pt",
+                              borderBottom: "2px solid #1e3a8a",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center"
+                            }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "10pt" }}>
+                                <div style={{ fontSize: "20pt", lineHeight: 1 }}>🏫</div>
+                                <div>
+                                  <div style={{ fontSize: "11pt", fontWeight: "bold", color: "#0f172a", fontFamily: "'Calibri','Sylfaen',sans-serif" }}>
+                                    სსიპ - ნესტორ გოქაძის სახელობის ქალაქ ქუთაისის N 22 საჯარო სკოლა
+                                  </div>
+                                  <div style={{ fontSize: "8.5pt", color: "#64748b", marginTop: "2pt", fontFamily: "'Calibri','Sylfaen',sans-serif" }}>
+                                    პროფესიული საგანმანათლებლო პროგრამა — კომპიუტერული ქსელი და სისტემები
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{ textAlign: "right", fontSize: "9pt", color: "#334155", fontWeight: 600, fontFamily: "'Calibri','Sylfaen',sans-serif" }}>
+                                {mod?.registration_number ? `სარეგ. № ${mod.registration_number}` : 'ქუთაისი'}
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ minHeight: "20pt", paddingTop: "14pt" }} />
+                          )}
                         </div>
                       </td>
                     </tr>

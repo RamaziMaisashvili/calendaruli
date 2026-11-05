@@ -198,28 +198,120 @@ async def upload_files(
             detail=f"ფაილის დამუშავებისას მოხდა შეცდომა: {str(e)}"
         )
 
+def detect_org_and_type(original_name: str, summary_data: dict = None, cm_type=None, cp_status=None, has_mr=False):
+    name_lower = (original_name or "").lower()
+    details = (summary_data or {}).get("details", {}) if isinstance(summary_data, dict) else {}
+    sum_type = str(details.get("type", "")).lower()
+    ext = os.path.splitext(name_lower)[1]
+
+    # 1. Organization detection (22-ე სკოლა vs WEA)
+    if any(k in name_lower for k in ["22", "ქსელ", "ქუთაის", "გოქაძ"]):
+        org = {
+            "organization_id": 2,
+            "organization_code": "22_skola",
+            "organization_name": "სსიპ - ნესტორ გოქაძის სახელობის ქალაქ ქუთაისის N 22 საჯარო სკოლა",
+            "organization_short": "22 სკოლა",
+            "has_wea_banner": False
+        }
+    elif any(k in name_lower for k in ["wea", "front-end", "frontend", "აკადემი", "მსოფლიო განათლებ"]):
+        org = {
+            "organization_id": 1,
+            "organization_code": "wea",
+            "organization_name": "შპს მსოფლიო განათლების აკადემია (WEA)",
+            "organization_short": "WEA",
+            "has_wea_banner": True
+        }
+    else:
+        org = {
+            "organization_id": None,
+            "organization_code": "other",
+            "organization_name": "საგანმანათლებლო დაწესებულება",
+            "organization_short": "სხვა",
+            "has_wea_banner": False
+        }
+
+    # 2. Type & Category detection (1=პროფესიული, 2=ზოგადი, 3=ინტეგრირებული)
+    mod_type_id = None
+    if cm_type is not None:
+        try:
+            mod_type_id = int(cm_type)
+        except Exception:
+            pass
+    if mod_type_id is None and cp_status is not None:
+        try:
+            mod_type_id = int(cp_status)
+        except Exception:
+            pass
+    if mod_type_id is None and "module_type_id" in details:
+        try:
+            mod_type_id = int(details["module_type_id"])
+        except Exception:
+            pass
+
+    is_excel = ext in [".xlsx", ".xls", ".csv"]
+    is_word = ext in [".docx", ".doc"]
+
+    if is_excel:
+        if has_mr or "რესურს" in name_lower or "რესურს" in sum_type or "resource" in name_lower:
+            category = "resources"
+            category_label = "მატერიალური რესურსები (Excel)"
+        elif cp_status is not None or "გეგმა" in name_lower or "გეგმა" in sum_type or "plan" in name_lower:
+            category = "plan"
+            category_label = "სასწავლო გეგმა (Excel)"
+        else:
+            category = "xlsx"
+            category_label = "Excel ცხრილი"
+    elif is_word:
+        if mod_type_id == 3 or any(k in name_lower for k in ["ინტეგრირებულ", "მათემატიკ", "მეცნიერ", "მოქალაქ", "სპორტ", "ესთეტიკ", "კომუნიკაცია"]) or "ინტეგრირებულ" in sum_type:
+            mod_type_id = 3
+            category = "integrated_module"
+            category_label = "ინტეგრირებული მოდული"
+        elif mod_type_id == 2 or any(k in name_lower for k in ["ზოგად", "მეწარმეობ", "უცხოური ენა", "პიროვნულ"]) or "ზოგად" in sum_type:
+            mod_type_id = 2
+            category = "general_module"
+            category_label = "ზოგადი მოდული"
+        else:
+            mod_type_id = 1
+            category = "vocational_module"
+            category_label = "პროფესიული მოდული"
+    else:
+        category = "other"
+        category_label = f"ფაილი ({ext.upper()})"
+
+    type_names = {1: "პროფესიული", 2: "ზოგადი", 3: "ინტეგრირებული"}
+    mod_type_name = type_names.get(mod_type_id, "პროფესიული" if is_word else None)
+
+    return {
+        **org,
+        "module_type_id": mod_type_id,
+        "module_type_name": mod_type_name,
+        "resource_category": category,
+        "resource_category_label": category_label
+    }
+
 @router.get("")
 def list_files(user: dict = Depends(get_current_user)):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
+            query = """
+                SELECT f.id, f.original_name, f.file_size, f.file_type, f.status, 
+                       f.processing_summary, f.created_at, f.user_id, u.name as uploader_name,
+                       cm.module_type as cm_module_type,
+                       cp.status as cp_status,
+                       mr.id as mr_id
+                FROM uploaded_files f
+                LEFT JOIN api_users u ON u.id = f.user_id
+                LEFT JOIN (SELECT file_id, MIN(module_type) as module_type FROM curriculum_modules GROUP BY file_id) cm ON cm.file_id = f.id
+                LEFT JOIN (SELECT file_id, MIN(status) as status FROM curriculum_plans GROUP BY file_id) cp ON cp.file_id = f.id
+                LEFT JOIN (SELECT file_id, MIN(id) as id FROM material_resources GROUP BY file_id) mr ON mr.file_id = f.id
+            """
             if user.get("role") == "teacher":
-                cur.execute("""
-                    SELECT f.id, f.original_name, f.file_size, f.file_type, f.status, 
-                           f.processing_summary, f.created_at, f.user_id, u.name as uploader_name
-                    FROM uploaded_files f
-                    LEFT JOIN api_users u ON u.id = f.user_id
-                    WHERE f.user_id = %s
-                    ORDER BY f.id DESC
-                """, (user["id"],))
+                query += " WHERE f.user_id = %s ORDER BY f.id DESC"
+                cur.execute(query, (user["id"],))
             else:
-                cur.execute("""
-                    SELECT f.id, f.original_name, f.file_size, f.file_type, f.status, 
-                           f.processing_summary, f.created_at, f.user_id, u.name as uploader_name
-                    FROM uploaded_files f
-                    LEFT JOIN api_users u ON u.id = f.user_id
-                    ORDER BY f.id DESC
-                """)
+                query += " ORDER BY f.id DESC"
+                cur.execute(query)
             rows = cur.fetchall()
     finally:
         conn.close()
@@ -232,6 +324,14 @@ def list_files(user: dict = Depends(get_current_user)):
                 summary_data = json.loads(r["processing_summary"])
             except Exception:
                 summary_data = {"raw": r["processing_summary"]}
+
+        classification = detect_org_and_type(
+            original_name=r["original_name"],
+            summary_data=summary_data,
+            cm_type=r.get("cm_module_type"),
+            cp_status=r.get("cp_status"),
+            has_mr=bool(r.get("mr_id"))
+        )
 
         files.append({
             "id": r["id"],
@@ -248,7 +348,16 @@ def list_files(user: dict = Depends(get_current_user)):
             ),
             "created_at": str(r["created_at"]),
             "user_id": r["user_id"],
-            "uploader_name": r["uploader_name"] or "სისტემა"
+            "uploader_name": r["uploader_name"] or "სისტემა",
+            "organization_id": classification["organization_id"],
+            "organization_code": classification["organization_code"],
+            "organization_name": classification["organization_name"],
+            "organization_short": classification["organization_short"],
+            "has_wea_banner": classification["has_wea_banner"],
+            "module_type_id": classification["module_type_id"],
+            "module_type_name": classification["module_type_name"],
+            "resource_category": classification["resource_category"],
+            "resource_category_label": classification["resource_category_label"]
         })
 
     return {
@@ -316,10 +425,17 @@ def get_file_module(file_id: int, user: dict = Depends(get_current_user)):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SELECT original_name, file_path FROM uploaded_files WHERE id = %s", (file_id,))
+            cur.execute("SELECT original_name, file_path, processing_summary FROM uploaded_files WHERE id = %s", (file_id,))
             f_row = cur.fetchone()
             if not f_row:
                 raise HTTPException(status_code=404, detail="ფაილი ვერ მოიძებნა")
+
+            summary_data = None
+            if f_row.get("processing_summary"):
+                try:
+                    summary_data = json.loads(f_row["processing_summary"])
+                except Exception:
+                    pass
 
             ext = os.path.splitext(f_row["original_name"])[1].lower()
 
@@ -385,11 +501,17 @@ def get_file_module(file_id: int, user: dict = Depends(get_current_user)):
                     else:
                         modules_map[mname]["equipment"].append(item)
 
+                org_info = detect_org_and_type(f_row["original_name"], summary_data, has_mr=True)
                 return {
                     "is_material_resources": True,
                     "title": f_row["original_name"],
                     "modules": list(modules_map.values()),
-                    "total_count": len(res_rows)
+                    "total_count": len(res_rows),
+                    "organization_id": org_info["organization_id"],
+                    "organization_code": org_info["organization_code"],
+                    "organization_name": org_info["organization_name"],
+                    "organization_short": org_info["organization_short"],
+                    "has_wea_banner": org_info["has_wea_banner"]
                 }
 
             if plan_rows:
@@ -404,11 +526,17 @@ def get_file_module(file_id: int, user: dict = Depends(get_current_user)):
                     p["status_id"] = to_module_type_id(p.get("status"))
                     p["status"] = to_module_type_name(p.get("status"))
 
+                org_info = detect_org_and_type(f_row["original_name"], summary_data, cp_status=plan_rows[0].get("status_id") if plan_rows else None)
                 return {
                     "is_curriculum_plan": True,
                     "title": f_row["original_name"],
                     "plans": plan_rows,
-                    "total_count": len(plan_rows)
+                    "total_count": len(plan_rows),
+                    "organization_id": org_info["organization_id"],
+                    "organization_code": org_info["organization_code"],
+                    "organization_name": org_info["organization_name"],
+                    "organization_short": org_info["organization_short"],
+                    "has_wea_banner": org_info["has_wea_banner"]
                 }
 
             # 3. DOCX მოდულის შემოწმება
@@ -513,11 +641,18 @@ def get_file_module(file_id: int, user: dict = Depends(get_current_user)):
                 mod["module_type_id"] = mod_type_id
                 mod["module_type"] = mod_type_name
 
+                org_info = detect_org_and_type(f_row["original_name"], summary_data, cm_type=mod_type_id)
+
                 return {
                     "has_module": True,
                     "module": mod,
                     "module_type": mod_type_name,
                     "module_type_id": mod_type_id,
+                    "organization_id": org_info["organization_id"],
+                    "organization_code": org_info["organization_code"],
+                    "organization_name": org_info["organization_name"],
+                    "organization_short": org_info["organization_short"],
+                    "has_wea_banner": org_info["has_wea_banner"],
                     "outcomes": outcomes,
                     "doc_elements": doc_elements
                 }
@@ -533,9 +668,17 @@ def get_file_module(file_id: int, user: dict = Depends(get_current_user)):
                 except Exception:
                     pass
 
+            org_info = detect_org_and_type(f_row["original_name"], summary_data)
+
             return {
                 "has_module": False,
                 "module_type": general_type,
+                "module_type_id": org_info["module_type_id"],
+                "organization_id": org_info["organization_id"],
+                "organization_code": org_info["organization_code"],
+                "organization_name": org_info["organization_name"],
+                "organization_short": org_info["organization_short"],
+                "has_wea_banner": org_info["has_wea_banner"],
                 "title": f_row["original_name"],
                 "doc_elements": doc_elements
             }

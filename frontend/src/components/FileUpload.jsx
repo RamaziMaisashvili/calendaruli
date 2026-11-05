@@ -4,7 +4,7 @@ import { api } from '../services/api';
 import { 
   UploadCloud, FileText, Download, Trash2, 
   Eye, X, RefreshCw, FileSpreadsheet, FileCode,
-  Search, Filter, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
+  Search, Filter, Building2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from 'lucide-react';
 import DocumentReader from './DocumentReader';
 
@@ -20,6 +20,7 @@ export default function FileUpload() {
 
   // ძებნა, ფილტრაცია და პაგინაცია
   const [searchTerm, setSearchTerm] = useState('');
+  const [orgFilter, setOrgFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -155,10 +156,147 @@ export default function FileUpload() {
   };
 
   // -------------------------------------------------------------
+  // ფაილის ორგანიზაციისა და მოდულის ტიპის განსაზღვრა (1=პროფესიული, 2=ზოგადი, 3=ინტეგრირებული)
+  // -------------------------------------------------------------
+  const resolveFileClassification = (f) => {
+    const name = (f.original_name || '').toLowerCase();
+    const ext = name.split('.').pop();
+    const summary = f.summary || {};
+    const details = summary.details || {};
+    const sumType = (details.type || '').toLowerCase();
+
+    // 1. ორგანიზაცია (22-ე სკოლა vs WEA)
+    let orgCode = f.organization_code;
+    let orgName = f.organization_name;
+    let orgShort = f.organization_short;
+
+    if (!orgCode) {
+      if (name.includes('22') || name.includes('ქსელ') || name.includes('ქუთაის') || name.includes('გოქაძ')) {
+        orgCode = '22_skola';
+        orgName = 'სსიპ - ნესტორ გოქაძის სახელობის ქალაქ ქუთაისის N 22 საჯარო სკოლა';
+        orgShort = '22 სკოლა';
+      } else if (name.includes('wea') || name.includes('front-end') || name.includes('frontend') || name.includes('აკადემი')) {
+        orgCode = 'wea';
+        orgName = 'შპს მსოფლიო განათლების აკადემია (WEA)';
+        orgShort = 'WEA';
+      } else {
+        orgCode = 'other';
+        orgName = 'საგანმანათლებლო დაწესებულება';
+        orgShort = 'სხვა';
+      }
+    }
+
+    // 2. მოდულის ტიპი და კატეგორია
+    let moduleTypeId = f.module_type_id != null ? Number(f.module_type_id) : (details.module_type_id != null ? Number(details.module_type_id) : null);
+    let category = f.resource_category;
+    let categoryLabel = f.resource_category_label || '';
+    let badgeClass = 'vocational-tag';
+
+    const isExcel = ['xlsx', 'xls', 'csv'].includes(ext);
+    const isWord = ['docx', 'doc'].includes(ext);
+
+    if (isExcel) {
+      if (category === 'resources' || sumType.includes('რესურს') || name.includes('რესურს') || name.includes('resource')) {
+        category = 'resources';
+        categoryLabel = 'მატერიალური რესურსები (Excel)';
+        badgeClass = 'resources-tag';
+      } else if (category === 'plan' || sumType.includes('გეგმა') || name.includes('გეგმა') || name.includes('plan')) {
+        category = 'plan';
+        categoryLabel = 'სასწავლო გეგმა (Excel)';
+        badgeClass = 'plan-tag';
+      } else {
+        category = 'xlsx';
+        categoryLabel = 'Excel ცხრილი';
+        badgeClass = 'sheet-tag';
+      }
+    } else if (isWord) {
+      const isIntegrated = (
+        moduleTypeId === 3 ||
+        sumType.includes('ინტეგრირებულ') ||
+        name.includes('ინტეგრირებულ') ||
+        name.includes('მათემატიკ') ||
+        name.includes('მეცნიერ') ||
+        name.includes('მოქალაქ') ||
+        name.includes('სპორტ') ||
+        name.includes('ესთეტიკ') ||
+        name.includes('კომუნიკაცია')
+      );
+
+      const isGeneral = !isIntegrated && (
+        moduleTypeId === 2 ||
+        sumType.includes('ზოგად') ||
+        name.includes('(ზოგადი)') ||
+        name.includes('ზოგადი') ||
+        name.includes('მეწარმეობ') ||
+        name.includes('უცხოური ენა') ||
+        name.includes('პიროვნული უნარებ')
+      );
+
+      if (isIntegrated) {
+        moduleTypeId = 3;
+        category = 'integrated_module';
+        categoryLabel = 'ინტეგრირებული მოდული';
+        badgeClass = 'integrated-tag';
+      } else if (isGeneral) {
+        moduleTypeId = 2;
+        category = 'general_module';
+        categoryLabel = 'ზოგადი მოდული';
+        badgeClass = 'general-tag';
+      } else {
+        moduleTypeId = 1;
+        category = 'vocational_module';
+        categoryLabel = 'პროფესიული მოდული';
+        badgeClass = 'vocational-tag';
+      }
+    } else {
+      category = 'other';
+      categoryLabel = `ფაილი (${ext.toUpperCase()})`;
+      badgeClass = 'doc-tag';
+    }
+
+    return {
+      orgCode,
+      orgName,
+      orgShort,
+      moduleTypeId,
+      category,
+      categoryLabel,
+      badgeClass
+    };
+  };
+
+  // -------------------------------------------------------------
   // ფილტრაცია და ძებნა
   // -------------------------------------------------------------
   const filteredFiles = useMemo(() => {
     return files.filter((f) => {
+      const classification = resolveFileClassification(f);
+
+      // ორგანიზაციის ფილტრი
+      if (orgFilter !== 'all' && classification.orgCode !== orgFilter) {
+        return false;
+      }
+
+      // ტიპის ფილტრი
+      if (typeFilter !== 'all') {
+        const ext = (f.original_name || '').split('.').pop().toLowerCase();
+        if (typeFilter === 'vocational') {
+          if (classification.category !== 'vocational_module' && classification.moduleTypeId !== 1) return false;
+        } else if (typeFilter === 'general') {
+          if (classification.category !== 'general_module' && classification.moduleTypeId !== 2) return false;
+        } else if (typeFilter === 'integrated') {
+          if (classification.category !== 'integrated_module' && classification.moduleTypeId !== 3) return false;
+        } else if (typeFilter === 'plan') {
+          if (classification.category !== 'plan') return false;
+        } else if (typeFilter === 'resources') {
+          if (classification.category !== 'resources') return false;
+        } else if (typeFilter === 'docx') {
+          if (!['docx', 'doc'].includes(ext)) return false;
+        } else if (typeFilter === 'xlsx') {
+          if (!['xlsx', 'xls', 'csv'].includes(ext)) return false;
+        }
+      }
+
       // ძებნის ტექსტი
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase().trim();
@@ -166,29 +304,18 @@ export default function FileUpload() {
         const author = (f.uploader_name || '').toLowerCase();
         const type = (f.summary?.details?.type || '').toLowerCase();
         const modName = (f.summary?.details?.module_name || '').toLowerCase();
-        if (!name.includes(q) && !author.includes(q) && !type.includes(q) && !modName.includes(q)) {
+        const orgInfo = (classification.orgName || '').toLowerCase() + ' ' + (classification.orgShort || '').toLowerCase();
+        const catLabel = (classification.categoryLabel || '').toLowerCase();
+
+        if (
+          !name.includes(q) && 
+          !author.includes(q) && 
+          !type.includes(q) && 
+          !modName.includes(q) && 
+          !orgInfo.includes(q) && 
+          !catLabel.includes(q)
+        ) {
           return false;
-        }
-      }
-
-      // ტიპის ფილტრი
-      if (typeFilter !== 'all') {
-        const ext = (f.original_name || '').split('.').pop().toLowerCase();
-        const summaryType = (f.summary?.details?.type || '').toLowerCase();
-        const name = (f.original_name || '').toLowerCase();
-
-        if (typeFilter === 'vocational') {
-          if (!summaryType.includes('პროფესიულ') && !name.includes('პროფესიულ')) return false;
-        } else if (typeFilter === 'general') {
-          if (!summaryType.includes('ზოგად') && !name.includes('ზოგად')) return false;
-        } else if (typeFilter === 'integrated') {
-          if (!summaryType.includes('ინტეგრირებულ') && !name.includes('ინტეგრირებულ') &&
-              !name.includes('მათემატიკ') && !name.includes('მეცნიერ') && 
-              !name.includes('მოქალაქ') && !name.includes('სპორტ') && !name.includes('ესთეტიკ')) return false;
-        } else if (typeFilter === 'docx') {
-          if (!['docx', 'doc'].includes(ext)) return false;
-        } else if (typeFilter === 'xlsx') {
-          if (!['xlsx', 'xls', 'csv'].includes(ext)) return false;
         }
       }
 
@@ -200,7 +327,7 @@ export default function FileUpload() {
 
       return true;
     });
-  }, [files, searchTerm, typeFilter, statusFilter]);
+  }, [files, searchTerm, orgFilter, typeFilter, statusFilter]);
 
   // პაგინაციის გამოთვლა
   const totalPages = Math.ceil(filteredFiles.length / pageSize) || 1;
@@ -214,6 +341,11 @@ export default function FileUpload() {
   // ძებნის/ფილტრის ცვლილებისას გვერდის დაბრუნება 1-ზე
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleOrgChange = (e) => {
+    setOrgFilter(e.target.value);
     setCurrentPage(1);
   };
 
@@ -328,17 +460,34 @@ export default function FileUpload() {
           {/* ფილტრები */}
           <div className="filter-controls">
             <div className="filter-select-wrapper">
+              <Building2 size={14} className="filter-icon" />
+              <select 
+                value={orgFilter} 
+                onChange={handleOrgChange}
+                className="filter-select"
+                title="ორგანიზაციის ფილტრი"
+              >
+                <option value="all">ყველა ორგანიზაცია</option>
+                <option value="22_skola">22-ე სკოლა (ქუთაისის N 22 საჯარო სკოლა)</option>
+                <option value="wea">WEA (მსოფლიო განათლების აკადემია)</option>
+              </select>
+            </div>
+
+            <div className="filter-select-wrapper">
               <Filter size={14} className="filter-icon" />
               <select 
                 value={typeFilter} 
                 onChange={handleTypeChange}
                 className="filter-select"
+                title="ტიპის ფილტრი"
               >
                 <option value="all">ყველა ტიპი</option>
-                <option value="vocational">პროფესიული მოდულები</option>
-                <option value="general">ზოგადი მოდულები</option>
-                <option value="integrated">ინტეგრირებული მოდულები</option>
-                <option value="docx">ყველა Word ფაილი (.docx)</option>
+                <option value="vocational">პროფესიული მოდულები (1)</option>
+                <option value="general">ზოგადი მოდულები (2)</option>
+                <option value="integrated">ინტეგრირებული მოდულები (3)</option>
+                <option value="plan">სასწავლო გეგმები (Excel)</option>
+                <option value="resources">მატერიალური რესურსები (Excel)</option>
+                <option value="docx">Word დოკუმენტები (.docx)</option>
                 <option value="xlsx">Excel ცხრილები (.xlsx)</option>
               </select>
             </div>
@@ -348,6 +497,7 @@ export default function FileUpload() {
                 value={statusFilter} 
                 onChange={handleStatusChange}
                 className="filter-select"
+                title="სტატუსის ფილტრი"
               >
                 <option value="all">ყველა სტატუსი</option>
                 <option value="completed">დამუშავებულია</option>
@@ -362,7 +512,7 @@ export default function FileUpload() {
           <div className="empty-state">
             <FileText className="empty-icon" />
             <p>
-              {searchTerm || typeFilter !== 'all' || statusFilter !== 'all'
+              {searchTerm || orgFilter !== 'all' || typeFilter !== 'all' || statusFilter !== 'all'
                 ? 'მითითებული ფილტრით რესურსები ვერ მოიძებნა.'
                 : isTeacher 
                   ? 'თქვენ ჯერჯერობით არ გაქვთ ატვირთული არცერთი სასწავლო რესურსი.' 
@@ -384,25 +534,30 @@ export default function FileUpload() {
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedFiles.map((file) => (
-                    <tr key={file.id}>
-                      <td>
-                        <div className="file-name-cell">
-                          <div className="file-icon-box">
-                            {getFileIcon(file.original_name)}
-                          </div>
-                          <div>
-                            <div className="file-title" title={file.original_name}>
-                              {file.original_name}
+                  {paginatedFiles.map((file) => {
+                    const cls = resolveFileClassification(file);
+                    return (
+                      <tr key={file.id}>
+                        <td>
+                          <div className="file-name-cell">
+                            <div className="file-icon-box">
+                              {getFileIcon(file.original_name)}
                             </div>
-                            {file.summary?.details?.type && (
-                              <div className="file-type-subtitle">
-                                {file.summary.details.type}
+                            <div>
+                              <div className="file-title" title={file.original_name}>
+                                {file.original_name}
                               </div>
-                            )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                <span className={`org-badge ${cls.orgCode === '22_skola' ? 'org-22' : cls.orgCode === 'wea' ? 'org-wea' : 'org-other'}`}>
+                                  {cls.orgShort}
+                                </span>
+                                <span className={`module-badge-tag ${cls.badgeClass}`}>
+                                  {cls.categoryLabel}
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
                       <td>{formatFileSize(file.file_size)}</td>
                       <td>{file.uploader_name || 'ადმინისტრატორი'}</td>
                       <td>{file.created_at ? new Date(file.created_at).toLocaleString('ka-GE') : '-'}</td>
@@ -442,7 +597,8 @@ export default function FileUpload() {
                         </div>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

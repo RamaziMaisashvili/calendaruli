@@ -873,6 +873,10 @@ input, select, textarea {
 /* ==============================================================
    Word Document Reader (სრულეკრანიანი თანამედროვე ხედი)
    ============================================================== */
+body.document-reader-open {
+  overflow: hidden;
+}
+
 .word-viewer-overlay {
   position: fixed !important;
   top: 0 !important;
@@ -1419,268 +1423,274 @@ input, select, textarea {
   font-size: 15px;
 }
 
-/* ბეჭდვის რეჟიმი (@media print) */
+
+
+/* ==============================================================
+   Word Document 1:1 Sheet & Frame Styles (დანართი 1 სტანდარტი)
+   ============================================================== */
+.wrap {
+  padding: 24px;
+  overflow: auto;
+  background: #d9d9d9;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.sheet {
+  background: #fff;
+  width: 792pt;
+  min-height: 612pt;
+  margin: 0 auto 24px;
+  padding: 0 0 0 72pt;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  position: relative;
+  font-family: 'Calibri', 'Sylfaen', 'Noto Sans Georgian', 'DejaVu Sans', sans-serif;
+  font-size: 10pt;
+  color: #000;
+  box-sizing: border-box;
+}
+
+.frame {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 648pt;
+}
+
+.frame > thead > tr > td,
+.frame > tbody > tr > td,
+.frame > tfoot > tr > td {
+  padding: 0;
+  border: 0;
+  vertical-align: top;
+}
+
+.hdr {
+  width: 648pt;
+  min-height: 40.5pt;
+  padding-top: 27pt;
+}
+
+.ftr {
+  width: 648pt;
+  min-height: 58.5pt;
+}
+
+.sheet p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.sheet td p {
+  overflow-wrap: anywhere;
+}
+
+.sheet img {
+  max-width: none;
+}
+
+.sheet thead {
+  display: table-header-group;
+}
+
+.sheet tfoot {
+  display: table-footer-group;
+}
+
+.word-doc-table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+  margin-top: 6pt;
+  margin-bottom: 14pt;
+  font-family: 'Calibri', 'Sylfaen', 'Noto Sans Georgian', 'DejaVu Sans', sans-serif;
+}
+
+.word-doc-table th,
+.word-doc-table td {
+  border: 0.5pt solid #BFBFBF !important;
+  vertical-align: top !important;
+  padding: 3pt 5.4pt !important;
+  font-size: 9pt !important;
+  line-height: 1.25 !important;
+  color: #000 !important;
+}
+
+.word-doc-table th,
+.word-doc-table .table-header-cell {
+  background-color: #f8fafc;
+  font-weight: bold;
+}
+
+.doc-cell-label {
+  background-color: #fafafa;
+  font-weight: bold;
+  width: 121.2pt;
+  color: #222;
+}
+
+/* ==============================================================
+   ბეჭდვის რეჟიმი (@media print) - მრავალგვერდიანი ბეჭდვის სრული მხარდაჭერა
+   ============================================================== */
 @media print {
-  body * {
-    visibility: hidden !important;
-  }
-  .word-viewer-overlay,
-  .word-viewer-overlay * {
-    visibility: visible !important;
-  }
-  .word-viewer-overlay {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    width: 100% !important;
-    background: white !important;
-    overflow: visible !important;
-    height: auto !important;
-  }
-  .no-print {
+  /* როცა დოკუმენტის დათვალიერება გახსნილია, დაიმალოს ძირითადი აპლიკაცია (#root) */
+  body.document-reader-open #root,
+  body:has(.word-viewer-overlay) #root {
     display: none !important;
   }
+
+  html, 
+  body, 
+  body.document-reader-open {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* სრულეკრანიანი მოდალის გადაყვანა ჩვეულებრივ სტატიკურ ნაკადში (გვერდებად დაყოფისთვის) */
+  .word-viewer-overlay {
+    position: static !important;
+    display: block !important;
+    left: auto !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    z-index: auto !important;
+  }
+
+  /* სამართავი პანელის, ღილაკებისა და არასაბეჭდი ელემენტების დამალვა */
+  .no-print,
+  .word-viewer-toolbar {
+    display: none !important;
+  }
+
+  /* დოკუმენტის სამუშაო სივრცე - overflow/flex-ის მოხსნა */
   .word-viewer-body {
-   
-    min-height: 0;
-    min-width: 0;
-    display: block;
+    position: static !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
   }
+
+  .wrap {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
+  .sheet {
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 0 0 36pt !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    position: static !important;
+    display: block !important;
+  }
+
   .word-paper-sheet {
-       margin-left: auto;
-    margin-right: auto;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    border: none !important;
+    border-radius: 0 !important;
   }
-  .word-doc-table.modern-table {
-    page-break-inside: auto;
+
+  .table-responsive-box {
+    overflow: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
-  .word-doc-table.modern-table tr {
-    page-break-inside: avoid;
-    page-break-after: auto;
+
+  /* დანართი 1 სტანდარტის ჩარჩო: thead/tfoot მეორდება ყველა დაბეჭდილ გვერდზე */
+  .frame {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: auto !important;
   }
-}
 
-/* ==============================================================
-   Word Document 1:1 Sheet & Frame Styles (დანართი 1 სტანდარტი)
-   ============================================================== */
-.wrap {
-  padding: 24px;
-  overflow: auto;
-  background: #d9d9d9;
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  box-sizing: border-box;
-  width: 100%;
-}
+  .frame > thead {
+    display: table-header-group !important;
+  }
 
-.sheet {
-  background: #fff;
-  width: 792pt;
-  min-height: 612pt;
-  margin: 0 auto 24px;
-  padding: 0 0 0 72pt;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
-  position: relative;
-  font-family: 'Calibri', 'Sylfaen', 'Noto Sans Georgian', 'DejaVu Sans', sans-serif;
-  font-size: 10pt;
-  color: #000;
-  box-sizing: border-box;
-}
+  .frame > tfoot {
+    display: table-footer-group !important;
+  }
 
-.frame {
-  border-collapse: collapse;
-  table-layout: fixed;
-  width: 648pt;
-}
+  /* ჩარჩოს მთავარ შიგთავსს მიეცეს გვერდებზე თავისუფლად გადანაწილების უფლება */
+  .frame,
+  .frame > tbody,
+  .frame > tbody > tr,
+  .frame > tbody > tr > td {
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+    height: auto !important;
+  }
 
-.frame > thead > tr > td,
-.frame > tbody > tr > td,
-.frame > tfoot > tr > td {
-  padding: 0;
-  border: 0;
-  vertical-align: top;
-}
+  .hdr {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
 
-.hdr {
-  width: 648pt;
-  min-height: 40.5pt;
-  padding-top: 27pt;
-}
+  .hdr img {
+    max-width: 100% !important;
+    height: auto !important;
+  }
 
-.ftr {
-  width: 648pt;
-  min-height: 58.5pt;
-}
+  /* შიდა ცხრილების სტრიქონების სუფთა გადანაწილება გვერდის საზღვარზე */
+  .frame table tr,
+  .word-doc-table tr,
+  .word-exact-table tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
 
-.sheet p {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-}
-
-.sheet td p {
-  overflow-wrap: anywhere;
-}
-
-.sheet img {
-  max-width: none;
-}
-
-.sheet thead {
-  display: table-header-group;
-}
-
-.sheet tfoot {
-  display: table-footer-group;
-}
-
-.word-doc-table {
-  border-collapse: collapse !important;
-  width: 100% !important;
-  margin-top: 6pt;
-  margin-bottom: 14pt;
-  font-family: 'Calibri', 'Sylfaen', 'Noto Sans Georgian', 'DejaVu Sans', sans-serif;
-}
-
-.word-doc-table th,
-.word-doc-table td {
-  border: 0.5pt solid #BFBFBF !important;
-  vertical-align: top !important;
-  padding: 3pt 5.4pt !important;
-  font-size: 9pt !important;
-  line-height: 1.25 !important;
-  color: #000 !important;
-}
-
-.word-doc-table th,
-.word-doc-table .table-header-cell {
-  background-color: #f8fafc;
-  font-weight: bold;
-}
-
-.doc-cell-label {
-  background-color: #fafafa;
-  font-weight: bold;
-  width: 121.2pt;
-  color: #222;
-}
-
-.doc-cell-val {
-  background-color: #fff;
-  width: 526.3pt;
-}
-
-
-/* ==============================================================
-   Word Document 1:1 Sheet & Frame Styles (დანართი 1 სტანდარტი)
-   ============================================================== */
-.wrap {
-  padding: 24px;
-  overflow: auto;
-  background: #d9d9d9;
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  box-sizing: border-box;
-  width: 100%;
-}
-
-.sheet {
-  background: #fff;
-  width: 792pt;
-  min-height: 612pt;
-  margin: 0 auto 24px;
-  padding: 0 0 0 72pt;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
-  position: relative;
-  font-family: 'Calibri', 'Sylfaen', 'Noto Sans Georgian', 'DejaVu Sans', sans-serif;
-  font-size: 10pt;
-  color: #000;
-  box-sizing: border-box;
-}
-
-.frame {
-  border-collapse: collapse;
-  table-layout: fixed;
-  width: 648pt;
-}
-
-.frame > thead > tr > td,
-.frame > tbody > tr > td,
-.frame > tfoot > tr > td {
-  padding: 0;
-  border: 0;
-  vertical-align: top;
-}
-
-.hdr {
-  width: 648pt;
-  min-height: 40.5pt;
-  padding-top: 27pt;
-}
-
-.ftr {
-  width: 648pt;
-  min-height: 58.5pt;
-}
-
-.sheet p {
-  margin: 0;
-  white-space: pre-wrap;
-  overflow-wrap: break-word;
-}
-
-.sheet td p {
-  overflow-wrap: anywhere;
-}
-
-.sheet img {
-  max-width: none;
-}
-
-.sheet thead {
-  display: table-header-group;
-}
-
-.sheet tfoot {
-  display: table-footer-group;
-}
-
-.word-doc-table {
-  border-collapse: collapse !important;
-  width: 100% !important;
-  margin-top: 6pt;
-  margin-bottom: 14pt;
-  font-family: 'Calibri', 'Sylfaen', 'Noto Sans Georgian', 'DejaVu Sans', sans-serif;
-}
-
-.word-doc-table th,
-.word-doc-table td {
-  border: 0.5pt solid #BFBFBF !important;
-  vertical-align: top !important;
-  padding: 3pt 5.4pt !important;
-  font-size: 9pt !important;
-  line-height: 1.25 !important;
-  color: #000 !important;
-}
-
-.word-doc-table th,
-.word-doc-table .table-header-cell {
-  background-color: #f8fafc;
-  font-weight: bold;
-}
-
-.doc-cell-label {
-  background-color: #fafafa;
-  font-weight: bold;
-  width: 121.2pt;
-  color: #222;
-}
-
-.doc-cell-val {
-  background-color: #fff;
-  width: 526.3pt;
+  /* მასშტაბირების (zoom) განულება ბეჭდვისას */
+  [style*="zoom"] {
+    zoom: 1 !important;
+  }
 }
 

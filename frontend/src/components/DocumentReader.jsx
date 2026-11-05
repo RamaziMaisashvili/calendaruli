@@ -19,9 +19,10 @@ export default function DocumentReader({ file, moduleData, onClose }) {
   const [zoomLevel, setZoomLevel] = useState(100);
   const [resourceSearch, setResourceSearch] = useState('');
 
-  // Body Scroll-ის დაბლოკვა მოდალის გახსნისას
+  // Body Scroll-ის დაბლოკვა მოდალის გახსნისას და მრავალგვერდიანი ბეჭდვის მხარდაჭერა
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
+    document.body.classList.add('document-reader-open');
     document.body.style.overflow = 'hidden';
 
     const handleKeyDown = (e) => {
@@ -38,13 +39,26 @@ export default function DocumentReader({ file, moduleData, onClose }) {
       setIsFullscreen(!!document.fullscreenElement);
     };
 
+    const handleBeforePrint = () => {
+      document.body.style.overflow = 'visible';
+    };
+
+    const handleAfterPrint = () => {
+      document.body.style.overflow = 'hidden';
+    };
+
     window.addEventListener('keydown', handleKeyDown);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+    window.addEventListener('beforeprint', handleBeforePrint);
+    window.addEventListener('afterprint', handleAfterPrint);
 
     return () => {
+      document.body.classList.remove('document-reader-open');
       document.body.style.overflow = originalOverflow;
       window.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('beforeprint', handleBeforePrint);
+      window.removeEventListener('afterprint', handleAfterPrint);
     };
   }, [onClose]);
 
@@ -72,6 +86,7 @@ export default function DocumentReader({ file, moduleData, onClose }) {
   const handleZoomReset = () => setZoomLevel(100);
 
   const handlePrint = () => {
+    document.body.style.overflow = 'visible';
     window.print();
   };
 

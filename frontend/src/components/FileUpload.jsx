@@ -170,12 +170,26 @@ export default function FileUpload() {
     let orgName = f.organization_name;
     let orgShort = f.organization_short;
 
-    if (!orgCode) {
-      if (name.includes('22') || name.includes('ქსელ') || name.includes('ქუთაის') || name.includes('გოქაძ')) {
+    if (!orgCode || orgCode === 'other') {
+      const weaKws = [
+        'დანართი', 'wea', 'front-end', 'frontend', 'აკადემი', 'მსოფლიო განათლებ',
+        'მარკირება', 'სტილიზაცია', 'javascript', 'typescript', 'react',
+        'ოპტიმიზაცია', 'ხელოვნური ინტელექტ', 'ბაღდათი'
+      ];
+      const school22Kws = [
+        '22', 'ქსელ', 'ქუთაის', 'გოქაძ', 'კომპიუტერ', 'პერიფერი', 'აპარატურ',
+        'მარშუტიზაც', 'კომუტაც', 'სერვერ', 'ლიტერატურა-ქსელი', 'წიგნიერება',
+        'მეცნიერება და ტექნოლოგი', 'მოქალაქეობა', 'სპორტი', 'ესთეტიკა', 'დამისამართება'
+      ];
+
+      const is22 = school22Kws.some(k => name.includes(k)) || /^\d+[\.\s\-]/.test(name.trim());
+      const isWea = !is22 && weaKws.some(k => name.includes(k));
+
+      if (is22) {
         orgCode = '22_skola';
         orgName = 'სსიპ - ნესტორ გოქაძის სახელობის ქალაქ ქუთაისის N 22 საჯარო სკოლა';
         orgShort = '22 სკოლა';
-      } else if (name.includes('wea') || name.includes('front-end') || name.includes('frontend') || name.includes('აკადემი')) {
+      } else if (isWea) {
         orgCode = 'wea';
         orgName = 'შპს მსოფლიო განათლების აკადემია (WEA)';
         orgShort = 'WEA';
@@ -482,9 +496,9 @@ export default function FileUpload() {
                 title="ტიპის ფილტრი"
               >
                 <option value="all">ყველა ტიპი</option>
-                <option value="vocational">პროფესიული მოდულები (1)</option>
-                <option value="general">ზოგადი მოდულები (2)</option>
-                <option value="integrated">ინტეგრირებული მოდულები (3)</option>
+                <option value="vocational">პროფესიული მოდულები</option>
+                <option value="general">ზოგადი მოდულები</option>
+                <option value="integrated">ინტეგრირებული მოდულები</option>
                 <option value="plan">სასწავლო გეგმები (Excel)</option>
                 <option value="resources">მატერიალური რესურსები (Excel)</option>
                 <option value="docx">Word დოკუმენტები (.docx)</option>

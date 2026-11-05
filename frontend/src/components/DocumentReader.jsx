@@ -152,10 +152,15 @@ export default function DocumentReader({ file, moduleData, onClose }) {
   const is22School = useMemo(() => {
     if (moduleData?.organization_code === '22_skola' || file?.organization_code === '22_skola') return true;
     const name = (file?.original_name || '').toLowerCase();
-    if (name.includes('22') || name.includes('ქსელ') || name.includes('ქუთაის') || name.includes('გოქაძ')) return true;
+    const school22Kws = [
+      '22', 'ქსელ', 'ქუთაის', 'გოქაძ', 'კომპიუტერ', 'პერიფერი', 'აპარატურ',
+      'მარშუტიზაც', 'კომუტაც', 'სერვერ', 'ლიტერატურა-ქსელი', 'წიგნიერება',
+      'მეცნიერება და ტექნოლოგი', 'მოქალაქეობა', 'სპორტი', 'ესთეტიკა', 'დამისამართება'
+    ];
+    if (school22Kws.some(k => name.includes(k)) || /^\d+[\.\s\-]/.test(name.trim())) return true;
     if (docElements && docElements.some(el => {
       const txt = (el.text || '').toLowerCase();
-      return txt.includes('22') || txt.includes('გოქაძ') || txt.includes('ქუთაის');
+      return txt.includes('22') || txt.includes('გოქაძ') || txt.includes('ქუთაის') || txt.includes('საჯარო სკოლა');
     })) return true;
     return false;
   }, [moduleData, file, docElements]);
@@ -165,7 +170,12 @@ export default function DocumentReader({ file, moduleData, onClose }) {
     if (moduleData?.has_wea_banner === true || file?.has_wea_banner === true) return true;
     if (moduleData?.organization_code === 'wea' || file?.organization_code === 'wea') return true;
     const name = (file?.original_name || '').toLowerCase();
-    if (name.includes('wea') || name.includes('front-end') || name.includes('frontend') || name.includes('აკადემი')) return true;
+    const weaKws = [
+      'დანართი', 'wea', 'front-end', 'frontend', 'აკადემი', 'მსოფლიო განათლებ',
+      'მარკირება', 'სტილიზაცია', 'javascript', 'typescript', 'react',
+      'ოპტიმიზაცია', 'ხელოვნური ინტელექტ', 'ბაღდათი'
+    ];
+    if (weaKws.some(k => name.includes(k))) return true;
     return false;
   }, [is22School, moduleData, file]);
 

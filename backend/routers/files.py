@@ -205,7 +205,26 @@ def detect_org_and_type(original_name: str, summary_data: dict = None, cm_type=N
     ext = os.path.splitext(name_lower)[1]
 
     # 1. Organization detection (22-ე სკოლა vs WEA)
-    if any(k in name_lower for k in ["22", "ქსელ", "ქუთაის", "გოქაძ"]):
+    wea_keywords = [
+        "დანართი", "wea", "front-end", "frontend", "აკადემი", "მსოფლიო განათლებ",
+        "მარკირება", "სტილიზაცია", "javascript", "typescript", "react",
+        "ოპტიმიზაცია", "ხელოვნური ინტელექტ", "ბაღდათი"
+    ]
+    school22_keywords = [
+        "22", "ქსელ", "ქუთაის", "გოქაძ", "კომპიუტერ", "პერიფერი", "აპარატურ",
+        "მარშუტიზაც", "კომუტაც", "სერვერ", "ლიტერატურა-ქსელი", "წიგნიერება",
+        "მეცნიერება და ტექნოლოგი", "მოქალაქეობა", "სპორტი", "ესთეტიკა", "დამისამართება"
+    ]
+
+    import re
+    base_name = os.path.basename(name_lower).strip()
+    is_22 = (
+        any(k in name_lower for k in school22_keywords) or
+        bool(re.match(r"^\d+[\.\s\-]", base_name))
+    )
+    is_wea = not is_22 and any(k in name_lower for k in wea_keywords)
+
+    if is_22:
         org = {
             "organization_id": 2,
             "organization_code": "22_skola",
@@ -213,7 +232,7 @@ def detect_org_and_type(original_name: str, summary_data: dict = None, cm_type=N
             "organization_short": "22 სკოლა",
             "has_wea_banner": False
         }
-    elif any(k in name_lower for k in ["wea", "front-end", "frontend", "აკადემი", "მსოფლიო განათლებ"]):
+    elif is_wea:
         org = {
             "organization_id": 1,
             "organization_code": "wea",

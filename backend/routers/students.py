@@ -8,7 +8,8 @@ router = APIRouter(prefix="/api/students", tags=["students"])
 
 def ensure_user_columns():
     """
-    უზრუნველყოფს, რომ api_users ცხრილში არსებობდეს email, phone და role სვეტები
+    უზრუნველყოფს, რომ api_users ცხრილში არსებობდეს ყველა საჭირო სვეტი:
+    email, phone, personal_id, city, program, birth_date, role
     """
     try:
         conn = get_connection()
@@ -22,9 +23,25 @@ def ensure_user_columns():
                 if not cur.fetchone():
                     cur.execute("ALTER TABLE api_users ADD COLUMN phone VARCHAR(50) NOT NULL DEFAULT '' AFTER email")
 
+                cur.execute("SHOW COLUMNS FROM api_users LIKE 'personal_id'")
+                if not cur.fetchone():
+                    cur.execute("ALTER TABLE api_users ADD COLUMN personal_id VARCHAR(50) NOT NULL DEFAULT '' AFTER phone")
+
+                cur.execute("SHOW COLUMNS FROM api_users LIKE 'city'")
+                if not cur.fetchone():
+                    cur.execute("ALTER TABLE api_users ADD COLUMN city VARCHAR(100) NOT NULL DEFAULT '' AFTER personal_id")
+
+                cur.execute("SHOW COLUMNS FROM api_users LIKE 'program'")
+                if not cur.fetchone():
+                    cur.execute("ALTER TABLE api_users ADD COLUMN program VARCHAR(190) NOT NULL DEFAULT '' AFTER city")
+
+                cur.execute("SHOW COLUMNS FROM api_users LIKE 'birth_date'")
+                if not cur.fetchone():
+                    cur.execute("ALTER TABLE api_users ADD COLUMN birth_date VARCHAR(50) NOT NULL DEFAULT '' AFTER program")
+
                 cur.execute("SHOW COLUMNS FROM api_users LIKE 'role'")
                 if not cur.fetchone():
-                    cur.execute("ALTER TABLE api_users ADD COLUMN role ENUM('admin','teacher','student') NOT NULL DEFAULT 'student' AFTER phone")
+                    cur.execute("ALTER TABLE api_users ADD COLUMN role ENUM('admin','teacher','student') NOT NULL DEFAULT 'student' AFTER birth_date")
                 conn.commit()
         finally:
             conn.close()
@@ -35,8 +52,12 @@ def ensure_user_columns():
 class StudentCreateRequest(BaseModel):
     username: str = Field(..., min_length=2, max_length=190)
     name: str = Field(..., min_length=2, max_length=190)
-    email: Optional[str] = ""
+    personal_id: Optional[str] = ""
+    birth_date: Optional[str] = ""
     phone: Optional[str] = ""
+    city: Optional[str] = ""
+    program: Optional[str] = "Front-end დეველოპმენტი"
+    email: Optional[str] = ""
     role: Optional[str] = "student"
     password: Optional[str] = "1234"
     is_active: Optional[bool] = True
@@ -44,15 +65,19 @@ class StudentCreateRequest(BaseModel):
 class StudentUpdateRequest(BaseModel):
     username: Optional[str] = None
     name: Optional[str] = None
-    email: Optional[str] = None
+    personal_id: Optional[str] = None
+    birth_date: Optional[str] = None
     phone: Optional[str] = None
+    city: Optional[str] = None
+    program: Optional[str] = None
+    email: Optional[str] = None
     role: Optional[str] = None
     password: Optional[str] = None
     is_active: Optional[bool] = None
 
 @router.get("")
 def list_students(
-    q: Optional[str] = Query(None, description="ძებნა სახელით, მომხმარებლით, მეილით ან ტელეფონით"),
+    q: Optional[str] = Query(None, description="ძებნა სახელით, პირადი ნომრით, ქალაქით, პროგრამით, ტელეფონით ან მომხმარებლით"),
     user: dict = Depends(get_current_user)
 ):
     """
@@ -62,33 +87,42 @@ def list_students(
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SHOW COLUMNS FROM api_users LIKE 'email'")
-            has_email = bool(cur.fetchone())
-            cur.execute("SHOW COLUMNS FROM api_users LIKE 'phone'")
-            has_phone = bool(cur.fetchone())
+            # ვამოწმებთ სვეტების არსებობას დინამიურად
+            cur.execute("SHOW COLUMNS FROM api_users")
+            cols = {col["Field"] for col in cur.fetchall()}
 
-            select_fields = "id, username, name, role, is_active, failed_attempts, created_at"
-            if has_email:
-                select_fields += ", email"
-            if has_phone:
-                select_fields += ", phone"
+            select_fields = ["id", "username", "name", "role", "is_active", "failed_attempts", "created_at"]
+            for opt_col in ["email", "phone", "personal_id", "city", "program", "birth_date"]:
+                if opt_col in cols:
+                    select_fields.append(opt_col)
 
-            query = f"SELECT {select_fields} FROM api_users WHERE role = 'student'"
+            query = f"SELECT {', '.join(select_fields)} FROM api_users WHERE role = 'student'"
             params = []
 
             if q and q.strip():
                 search_term = f"%{q.strip().lower()}%"
                 conds = ["LOWER(name) LIKE %s", "LOWER(username) LIKE %s"]
                 params.extend([search_term, search_term])
-                if has_email:
-                    conds.append("LOWER(email) LIKE %s")
+                
+                if "personal_id" in cols:
+                    conds.append("personal_id LIKE %s")
                     params.append(search_term)
-                if has_phone:
+                if "city" in cols:
+                    conds.append("LOWER(city) LIKE %s")
+                    params.append(search_term)
+                if "program" in cols:
+                    conds.append("LOWER(program) LIKE %s")
+                    params.append(search_term)
+                if "phone" in cols:
                     conds.append("phone LIKE %s")
                     params.append(search_term)
+                if "email" in cols:
+                    conds.append("LOWER(email) LIKE %s")
+                    params.append(search_term)
+
                 query += " AND (" + " OR ".join(conds) + ")"
 
-            query += " ORDER BY name ASC"
+            query += " ORDER BY id ASC"
             cur.execute(query, tuple(params))
             rows = cur.fetchall()
 
@@ -98,8 +132,12 @@ def list_students(
                     "id": r["id"],
                     "username": r["username"],
                     "name": r["name"],
-                    "email": r.get("email", ""),
+                    "personal_id": r.get("personal_id", ""),
+                    "birth_date": r.get("birth_date", ""),
                     "phone": r.get("phone", ""),
+                    "city": r.get("city", ""),
+                    "program": r.get("program", ""),
+                    "email": r.get("email", ""),
                     "role": r.get("role", "student"),
                     "is_active": bool(r.get("is_active", 1)),
                     "created_at": str(r.get("created_at", ""))
@@ -122,16 +160,15 @@ def get_student(student_id: int, user: dict = Depends(get_current_user)):
     conn = get_connection()
     try:
         with conn.cursor() as cur:
-            cur.execute("SHOW COLUMNS FROM api_users LIKE 'email'")
-            has_email = bool(cur.fetchone())
-            cur.execute("SHOW COLUMNS FROM api_users LIKE 'phone'")
-            has_phone = bool(cur.fetchone())
+            cur.execute("SHOW COLUMNS FROM api_users")
+            cols = {col["Field"] for col in cur.fetchall()}
 
-            fields = "id, username, name, role, is_active, created_at"
-            if has_email: fields += ", email"
-            if has_phone: fields += ", phone"
+            select_fields = ["id", "username", "name", "role", "is_active", "created_at"]
+            for opt_col in ["email", "phone", "personal_id", "city", "program", "birth_date"]:
+                if opt_col in cols:
+                    select_fields.append(opt_col)
 
-            cur.execute(f"SELECT {fields} FROM api_users WHERE id = %s", (student_id,))
+            cur.execute(f"SELECT {', '.join(select_fields)} FROM api_users WHERE id = %s", (student_id,))
             r = cur.fetchone()
             if not r:
                 raise HTTPException(status_code=404, detail="სტუდენტი ვერ მოიძებნა")
@@ -142,8 +179,12 @@ def get_student(student_id: int, user: dict = Depends(get_current_user)):
                     "id": r["id"],
                     "username": r["username"],
                     "name": r["name"],
-                    "email": r.get("email", ""),
+                    "personal_id": r.get("personal_id", ""),
+                    "birth_date": r.get("birth_date", ""),
                     "phone": r.get("phone", ""),
+                    "city": r.get("city", ""),
+                    "program": r.get("program", ""),
+                    "email": r.get("email", ""),
                     "role": r.get("role", "student"),
                     "is_active": bool(r.get("is_active", 1)),
                     "created_at": str(r.get("created_at", ""))
@@ -165,6 +206,10 @@ def create_student(data: StudentCreateRequest, user: dict = Depends(get_current_
     clean_name = data.name.strip()
     clean_email = (data.email or "").strip()
     clean_phone = (data.phone or "").strip()
+    clean_personal_id = (data.personal_id or "").strip()
+    clean_city = (data.city or "").strip()
+    clean_program = (data.program or "Front-end დეველოპმენტი").strip()
+    clean_birth_date = (data.birth_date or "").strip()
     clean_role = (data.role or "student").strip().lower()
     if clean_role not in ["admin", "teacher", "student"]:
         clean_role = "student"
@@ -180,26 +225,33 @@ def create_student(data: StudentCreateRequest, user: dict = Depends(get_current_
 
             pwd_hash = hash_password(raw_pwd)
 
-            # ვამოწმებთ სვეტებს
-            cur.execute("SHOW COLUMNS FROM api_users LIKE 'email'")
-            has_email = bool(cur.fetchone())
-            cur.execute("SHOW COLUMNS FROM api_users LIKE 'phone'")
-            has_phone = bool(cur.fetchone())
+            cur.execute("SHOW COLUMNS FROM api_users")
+            cols = {col["Field"] for col in cur.fetchall()}
 
-            cols = ["username", "name", "role", "password_hash", "is_active", "failed_attempts"]
+            insert_cols = ["username", "name", "role", "password_hash", "is_active", "failed_attempts"]
             vals = [clean_username, clean_name, clean_role, pwd_hash, 1 if data.is_active else 0, 0]
-            placeholders = ["%s"] * len(cols)
 
-            if has_email:
-                cols.append("email")
+            if "personal_id" in cols:
+                insert_cols.append("personal_id")
+                vals.append(clean_personal_id)
+            if "city" in cols:
+                insert_cols.append("city")
+                vals.append(clean_city)
+            if "program" in cols:
+                insert_cols.append("program")
+                vals.append(clean_program)
+            if "birth_date" in cols:
+                insert_cols.append("birth_date")
+                vals.append(clean_birth_date)
+            if "email" in cols:
+                insert_cols.append("email")
                 vals.append(clean_email)
-                placeholders.append("%s")
-            if has_phone:
-                cols.append("phone")
+            if "phone" in cols:
+                insert_cols.append("phone")
                 vals.append(clean_phone)
-                placeholders.append("%s")
 
-            insert_sql = f"INSERT INTO api_users ({', '.join(cols)}) VALUES ({', '.join(placeholders)})"
+            placeholders = ["%s"] * len(insert_cols)
+            insert_sql = f"INSERT INTO api_users ({', '.join(insert_cols)}) VALUES ({', '.join(placeholders)})"
             cur.execute(insert_sql, tuple(vals))
             conn.commit()
             new_id = cur.lastrowid
@@ -211,6 +263,10 @@ def create_student(data: StudentCreateRequest, user: dict = Depends(get_current_
                     "id": new_id,
                     "username": clean_username,
                     "name": clean_name,
+                    "personal_id": clean_personal_id,
+                    "city": clean_city,
+                    "program": clean_program,
+                    "birth_date": clean_birth_date,
                     "email": clean_email,
                     "phone": clean_phone,
                     "role": clean_role,
@@ -237,6 +293,9 @@ def update_student(student_id: int, data: StudentUpdateRequest, user: dict = Dep
             if not existing:
                 raise HTTPException(status_code=404, detail="სტუდენტი ვერ მოიძებნა")
 
+            cur.execute("SHOW COLUMNS FROM api_users")
+            cols = {col["Field"] for col in cur.fetchall()}
+
             updates = []
             params = []
 
@@ -253,15 +312,27 @@ def update_student(student_id: int, data: StudentUpdateRequest, user: dict = Dep
                 updates.append("name = %s")
                 params.append(data.name.strip())
 
-            cur.execute("SHOW COLUMNS FROM api_users LIKE 'email'")
-            has_email = bool(cur.fetchone())
-            if has_email and data.email is not None:
+            if "personal_id" in cols and data.personal_id is not None:
+                updates.append("personal_id = %s")
+                params.append(data.personal_id.strip())
+
+            if "city" in cols and data.city is not None:
+                updates.append("city = %s")
+                params.append(data.city.strip())
+
+            if "program" in cols and data.program is not None:
+                updates.append("program = %s")
+                params.append(data.program.strip())
+
+            if "birth_date" in cols and data.birth_date is not None:
+                updates.append("birth_date = %s")
+                params.append(data.birth_date.strip())
+
+            if "email" in cols and data.email is not None:
                 updates.append("email = %s")
                 params.append(data.email.strip())
 
-            cur.execute("SHOW COLUMNS FROM api_users LIKE 'phone'")
-            has_phone = bool(cur.fetchone())
-            if has_phone and data.phone is not None:
+            if "phone" in cols and data.phone is not None:
                 updates.append("phone = %s")
                 params.append(data.phone.strip())
 

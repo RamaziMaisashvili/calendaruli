@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   GraduationCap, UserPlus, Search, X, Edit, Trash2, Phone, Mail, 
   CheckCircle, AlertCircle, RefreshCw, Lock, User,
-  Check, XCircle
+  Check, XCircle, Calendar, MapPin, BookOpen, Hash
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -19,6 +19,7 @@ export default function StudentsCRUD() {
   // ფილტრაცია და ძებნა
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all, active, inactive
+  const [cityFilter, setCityFilter] = useState('all');
 
   // მოდალის მდგომარეობა
   const [modalOpen, setModalOpen] = useState(false);
@@ -34,7 +35,11 @@ export default function StudentsCRUD() {
   const [formData, setFormData] = useState({
     name: '',
     username: '',
+    personal_id: '',
+    birth_date: '',
     phone: '',
+    city: '',
+    program: 'Front-end დეველოპმენტი',
     email: '',
     role: 'student',
     password: '',
@@ -69,6 +74,15 @@ export default function StudentsCRUD() {
     }
   }, [successMsg]);
 
+  // ქალაქების უნიკალური სია ფილტრისთვის
+  const cities = useMemo(() => {
+    const set = new Set();
+    students.forEach(s => {
+      if (s.city && s.city.trim()) set.add(s.city.trim());
+    });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ka'));
+  }, [students]);
+
   // ძებნა და ფილტრაცია
   const filteredStudents = useMemo(() => {
     return students.filter(s => {
@@ -76,18 +90,24 @@ export default function StudentsCRUD() {
       if (statusFilter === 'active' && !s.is_active) return false;
       if (statusFilter === 'inactive' && s.is_active) return false;
 
+      // ქალაქის ფილტრი
+      if (cityFilter !== 'all' && s.city !== cityFilter) return false;
+
       // ტექსტური ძებნა
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase().trim();
         const nMatch = (s.name || '').toLowerCase().includes(q);
         const uMatch = (s.username || '').toLowerCase().includes(q);
         const pMatch = (s.phone || '').includes(q);
+        const idMatch = (s.personal_id || '').includes(q);
+        const cMatch = (s.city || '').toLowerCase().includes(q);
+        const prMatch = (s.program || '').toLowerCase().includes(q);
         const eMatch = (s.email || '').toLowerCase().includes(q);
-        return nMatch || uMatch || pMatch || eMatch;
+        return nMatch || uMatch || pMatch || idMatch || cMatch || prMatch || eMatch;
       }
       return true;
     });
-  }, [students, searchTerm, statusFilter]);
+  }, [students, searchTerm, statusFilter, cityFilter]);
 
   // სტატისტიკა
   const stats = useMemo(() => {
@@ -102,7 +122,11 @@ export default function StudentsCRUD() {
     setFormData({
       name: '',
       username: '',
+      personal_id: '',
+      birth_date: '',
       phone: '',
+      city: '',
+      program: 'Front-end დეველოპმენტი',
       email: '',
       role: 'student',
       password: '1234',
@@ -118,7 +142,11 @@ export default function StudentsCRUD() {
     setFormData({
       name: s.name || '',
       username: s.username || '',
+      personal_id: s.personal_id || '',
+      birth_date: s.birth_date ? s.birth_date.replace(' 00:00:00', '') : '',
       phone: s.phone || '',
+      city: s.city || '',
+      program: s.program || 'Front-end დეველოპმენტი',
       email: s.email || '',
       role: s.role || 'student',
       password: '',
@@ -151,7 +179,7 @@ export default function StudentsCRUD() {
       .split('')
       .map(char => map[char] || char)
       .join('')
-      .replace(/\s+/g, '.')
+      .replace(/\s+/g, '_')
       .replace(/[^a-z0-9._-]/g, '');
   };
 
@@ -175,7 +203,11 @@ export default function StudentsCRUD() {
         const payload = {
           name: formData.name.trim(),
           username: formData.username.trim().toLowerCase(),
+          personal_id: formData.personal_id.trim(),
+          birth_date: formData.birth_date.trim(),
           phone: formData.phone.trim(),
+          city: formData.city.trim(),
+          program: formData.program.trim(),
           email: formData.email.trim(),
           role: 'student',
           is_active: formData.is_active
@@ -189,7 +221,11 @@ export default function StudentsCRUD() {
         const payload = {
           name: formData.name.trim(),
           username: formData.username.trim().toLowerCase(),
+          personal_id: formData.personal_id.trim(),
+          birth_date: formData.birth_date.trim(),
           phone: formData.phone.trim(),
+          city: formData.city.trim(),
+          program: formData.program.trim(),
           email: formData.email.trim(),
           role: 'student',
           password: formData.password.trim() || '1234',
@@ -244,7 +280,7 @@ export default function StudentsCRUD() {
             </div>
             <div>
               <h1 className="crud-main-title">სტუდენტების მართვა</h1>
-              <p className="crud-subtitle">სტუდენტების სია, საკონტაქტო მონაცემები და ავტორიზაციის ანგარიშები</p>
+              <p className="crud-subtitle">სტუდენტების სია, პირადი ნომრები, ქალაქები და საკონტაქტო მონაცემები</p>
             </div>
           </div>
         </div>
@@ -307,7 +343,7 @@ export default function StudentsCRUD() {
           <input
             type="text"
             className="crud-search-input"
-            placeholder="ძებნა სახელით, username-ით, ტელეფონით, მეილით..."
+            placeholder="ძებნა სახელით, პირადი ნომრით, ქალაქით, ტელეფონით, მომხმარებლით..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -317,6 +353,21 @@ export default function StudentsCRUD() {
             </button>
           )}
         </div>
+
+        {cities.length > 0 && (
+          <div className="crud-status-select-wrap">
+            <select 
+              className="crud-select" 
+              value={cityFilter} 
+              onChange={(e) => setCityFilter(e.target.value)}
+            >
+              <option value="all">ყველა ქალაქი ({cities.length})</option>
+              {cities.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="crud-status-select-wrap">
           <select 
@@ -343,7 +394,7 @@ export default function StudentsCRUD() {
             <GraduationCap size={44} className="empty-icon" style={{ color: '#94a3b8' }} />
             <h3>სტუდენტები ვერ მოიძებნა</h3>
             <p>
-              {searchTerm || statusFilter !== 'all'
+              {searchTerm || statusFilter !== 'all' || cityFilter !== 'all'
                 ? 'მითითებული საძიებო პარამეტრებით სტუდენტი ვერ მოიძებნა.' 
                 : 'ბაზაში სტუდენტები ჯერჯერობით შეყვანილი არ არის.'}
             </p>
@@ -361,9 +412,12 @@ export default function StudentsCRUD() {
                 <tr>
                   <th style={{ width: '45px' }}>#</th>
                   <th>სახელი და გვარი</th>
+                  <th>პირადი N</th>
+                  <th>დაბ. თარიღი</th>
+                  <th>ნომერი</th>
+                  <th>ქალაქი</th>
+                  <th>პროგრამა</th>
                   <th>მომხმარებელი</th>
-                  <th>ტელეფონი</th>
-                  <th>ელ.ფოსტა</th>
                   <th>სტატუსი</th>
                   {isAdmin && <th style={{ textAlign: 'right' }}>მოქმედება</th>}
                 </tr>
@@ -384,14 +438,23 @@ export default function StudentsCRUD() {
                       </div>
                     </td>
                     <td>
-                      <span className="username-badge">
-                        {s.username}
+                      {s.personal_id ? (
+                        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1e293b', background: '#f8fafc', padding: '3px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}>
+                          {s.personal_id}
+                        </span>
+                      ) : (
+                        <span className="text-empty">—</span>
+                      )}
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '13px', color: '#475569', whiteSpace: 'nowrap' }}>
+                        {s.birth_date ? s.birth_date.replace(' 00:00:00', '') : '—'}
                       </span>
                     </td>
                     <td>
                       {s.phone ? (
                         <a href={`tel:${s.phone}`} className="contact-link" title="დარეკვა">
-                          <Phone size={14} className="contact-icon" />
+                          <Phone size={13} className="contact-icon" />
                           <span>{s.phone}</span>
                         </a>
                       ) : (
@@ -399,14 +462,28 @@ export default function StudentsCRUD() {
                       )}
                     </td>
                     <td>
-                      {s.email ? (
-                        <a href={`mailto:${s.email}`} className="contact-link" title="წერილის მიწერა">
-                          <Mail size={14} className="contact-icon" />
-                          <span>{s.email}</span>
-                        </a>
+                      {s.city ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', color: '#334155', padding: '3px 8px', borderRadius: '6px', fontSize: '12.5px', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                          <MapPin size={12} style={{ color: '#64748b' }} />
+                          {s.city}
+                        </span>
                       ) : (
                         <span className="text-empty">—</span>
                       )}
+                    </td>
+                    <td>
+                      {s.program ? (
+                        <span style={{ display: 'inline-block', background: '#ecfdf5', color: '#065f46', border: '1px solid #a7f3d0', padding: '3px 9px', borderRadius: '12px', fontSize: '12px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                          {s.program}
+                        </span>
+                      ) : (
+                        <span className="text-empty">—</span>
+                      )}
+                    </td>
+                    <td>
+                      <span className="username-badge">
+                        {s.username}
+                      </span>
                     </td>
                     <td>
                       <span className={`status-pill ${s.is_active ? 'pill-active' : 'pill-inactive'}`}>
@@ -454,7 +531,7 @@ export default function StudentsCRUD() {
       {/* მოდალი: დამატება / რედაქტირება */}
       {modalOpen && (
         <div className="crud-modal-backdrop">
-          <div className="crud-modal-card fade-in">
+          <div className="crud-modal-card fade-in" style={{ maxWidth: '580px' }}>
             <div className="crud-modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <div className="modal-icon-wrap" style={{ background: '#ecfdf5', color: '#10b981' }}>
@@ -483,7 +560,7 @@ export default function StudentsCRUD() {
                     <input
                       type="text"
                       className="form-input"
-                      placeholder="მაგ. ნიკა გიორგაძე"
+                      placeholder="მაგ. დიანა სახურია"
                       value={formData.name}
                       onChange={handleNameChange}
                       required
@@ -491,33 +568,91 @@ export default function StudentsCRUD() {
                   </div>
                 </div>
 
-                <div className="form-group">
-                  <label>მომხმარებელი (Username) *</label>
-                  <div className="input-with-icon">
-                    <span className="input-prefix">@</span>
-                    <input
-                      type="text"
-                      className="form-input"
-                      placeholder="მაგ. nika.giorgadze"
-                      value={formData.username}
-                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                      required
-                    />
+                <div className="form-row">
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>პირადი ნომერი</label>
+                    <div className="input-with-icon">
+                      <Hash size={16} className="input-icon" />
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="მაგ. 48001005823"
+                        value={formData.personal_id}
+                        onChange={(e) => setFormData({ ...formData, personal_id: e.target.value })}
+                      />
+                    </div>
                   </div>
-                  <span className="form-hint">გამოიყენება სისტემაში შესვლისთვის</span>
+
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>დაბადების თარიღი</label>
+                    <div className="input-with-icon">
+                      <Calendar size={16} className="input-icon" />
+                      <input
+                        type="date"
+                        className="form-input"
+                        value={formData.birth_date}
+                        onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="form-row">
                   <div className="form-group" style={{ flex: 1 }}>
-                    <label>ტელეფონი</label>
+                    <label>ტელეფონის ნომერი</label>
                     <div className="input-with-icon">
                       <Phone size={16} className="input-icon" />
                       <input
                         type="text"
                         className="form-input"
-                        placeholder="მაგ. 599 12 34 56"
+                        placeholder="მაგ. 599713639"
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>ქალაქი</label>
+                    <div className="input-with-icon">
+                      <MapPin size={16} className="input-icon" />
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="მაგ. ზუგდიდი"
+                        value={formData.city}
+                        onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>სასწავლო პროგრამა</label>
+                  <div className="input-with-icon">
+                    <BookOpen size={16} className="input-icon" />
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Front-end დეველოპმენტი"
+                      value={formData.program}
+                      onChange={(e) => setFormData({ ...formData, program: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <label>მომხმარებელი (Username) *</label>
+                    <div className="input-with-icon">
+                      <span className="input-prefix">@</span>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="მაგ. diana_sakhuria"
+                        value={formData.username}
+                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                        required
                       />
                     </div>
                   </div>
@@ -529,7 +664,7 @@ export default function StudentsCRUD() {
                       <input
                         type="email"
                         className="form-input"
-                        placeholder="მაგ. student@gmail.com"
+                        placeholder="student@example.ge"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       />
@@ -604,7 +739,7 @@ export default function StudentsCRUD() {
             </div>
             <h3>სტუდენტის წაშლა</h3>
             <p>
-              ნამდვილად გსურთ სტუდენტ <strong>„{deleteCandidate.name}“</strong> (@{deleteCandidate.username})-ის წაშლა?
+              ნამდვილად გსურთ სტუდენტ <strong>„{deleteCandidate.name}“</strong> ({deleteCandidate.username})-ის წაშლა?
             </p>
             <div className="confirm-modal-actions">
               <button

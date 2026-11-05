@@ -8,6 +8,7 @@ import pymysql
 from database import get_connection, DB_HOST, DB_PORT, DB_NAME, DB_USER
 from routers.auth import router as auth_router
 from routers.files import router as files_router
+from routers.teachers import router as teachers_router
 
 # აპლიკაციის ინიციალიზაცია (მხოლოდ შესვლის წერტილი)
 app = FastAPI(
@@ -42,6 +43,7 @@ async def mysql_error_handler(request, exc):
 # როუტერების მიერთება
 app.include_router(auth_router)
 app.include_router(files_router)
+app.include_router(teachers_router)
 
 @app.get("/")
 def root():

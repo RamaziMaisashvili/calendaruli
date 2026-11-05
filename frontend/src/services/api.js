@@ -178,5 +178,39 @@ export const api = {
       method: 'GET',
     });
   },
+
+  // მასწავლებლების CRUD
+  getTeachers: async (search = '') => {
+    const query = search ? `?q=${encodeURIComponent(search)}` : '';
+    return request(`/api/teachers${query}`, {
+      method: 'GET',
+    });
+  },
+
+  getTeacher: async (id) => {
+    return request(`/api/teachers/${id}`, {
+      method: 'GET',
+    });
+  },
+
+  createTeacher: async (data) => {
+    return request('/api/teachers', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateTeacher: async (id, data) => {
+    return request(`/api/teachers/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteTeacher: async (id) => {
+    return request(`/api/teachers/${id}`, {
+      method: 'DELETE',
+    });
+  },
 };
 

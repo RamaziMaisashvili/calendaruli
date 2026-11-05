@@ -77,7 +77,9 @@ def authenticate_user(username: str, password: str):
                     "id": user["id"],
                     "username": user["username"],
                     "name": user["name"],
-                    "role": user["role"]
+                    "role": user.get("role", "teacher"),
+                    "email": user.get("email", ""),
+                    "phone": user.get("phone", "")
                 }
             }
     finally:
@@ -93,7 +95,7 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT s.id as session_id, s.token_issued_at, s.last_activity_at, s.revoked_at,
-                       u.id, u.username, u.name, u.role, u.is_active
+                       u.*
                 FROM api_token_sessions s
                 JOIN api_users u ON u.id = s.user_id
                 WHERE s.token_hash = %s
@@ -111,7 +113,9 @@ def get_current_user(credentials: HTTPAuthorizationCredentials = Security(securi
                 "id": row["id"],
                 "username": row["username"],
                 "name": row["name"],
-                "role": row["role"]
+                "role": row.get("role", "teacher"),
+                "email": row.get("email", ""),
+                "phone": row.get("phone", "")
             }
     finally:
         conn.close()

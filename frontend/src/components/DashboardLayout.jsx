@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, UploadCloud, LogOut, BookOpen, FolderOpen } from 'lucide-react';
+import { LayoutDashboard, UploadCloud, LogOut, BookOpen, FolderOpen, Users } from 'lucide-react';
 
 export default function DashboardLayout({ children, activeTab, setActiveTab }) {
   const { user, logout } = useAuth();
@@ -24,6 +24,7 @@ export default function DashboardLayout({ children, activeTab, setActiveTab }) {
 
   const getPageTitle = () => {
     if (activeTab === 'dashboard') return 'დაშბორდი';
+    if (activeTab === 'teachers') return 'მასწავლებლების მართვა';
     if (activeTab === 'resources') {
       if (isAdmin) return 'ფაილების ატვირთვა და მართვა';
       if (isTeacher) return 'ჩემი სასწავლო რესურსები';
@@ -55,7 +56,16 @@ export default function DashboardLayout({ children, activeTab, setActiveTab }) {
             <span>დაშბორდი</span>
           </button>
 
-          {/* 2. მეორე პუნქტი როლის მიხედვით */}
+          {/* 2. მასწავლებლები */}
+          <button
+            className={`nav-item ${activeTab === 'teachers' ? 'active' : ''}`}
+            onClick={() => setActiveTab('teachers')}
+          >
+            <Users size={18} />
+            <span>მასწავლებლები</span>
+          </button>
+
+          {/* 3. რესურსები / ატვირთვა */}
           {isAdmin ? (
             <button
               className={`nav-item ${activeTab === 'resources' ? 'active' : ''}`}

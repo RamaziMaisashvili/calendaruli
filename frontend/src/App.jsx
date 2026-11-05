@@ -4,6 +4,7 @@ import Login from './components/Login';
 import DashboardLayout from './components/DashboardLayout';
 import Dashboard from './components/Dashboard';
 import FileUpload from './components/FileUpload';
+import TeachersCRUD from './components/TeachersCRUD';
 
 function MainApp() {
   const { isAuthenticated, loading } = useAuth();
@@ -34,6 +35,7 @@ function MainApp() {
   return (
     <DashboardLayout activeTab={activeTab} setActiveTab={setActiveTab}>
       {activeTab === 'dashboard' && <Dashboard />}
+      {activeTab === 'teachers' && <TeachersCRUD />}
       {activeTab === 'resources' && <FileUpload />}
     </DashboardLayout>
   );

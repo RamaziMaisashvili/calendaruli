@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Printer, Download, X, FileText, Maximize2, Minimize2, 
   ZoomIn, ZoomOut, Layout, BookOpen, Layers, FileSpreadsheet,
-  Package, Calendar, Clock, Search, Award
+  Package, Calendar, Clock, Search, Award, ExternalLink
 } from 'lucide-react';
 import { api } from '../services/api';
 import Document from './Document';
@@ -78,6 +79,51 @@ export default function DocumentReader({ file, moduleData, onClose }) {
     api.downloadFile(file.id, file.original_name).catch((err) => {
       alert('ჩამოტვირთვა ვერ მოხერხდა: ' + (err.message || err));
     });
+  };
+
+  const handleOpenNewWindow = () => {
+    const win = window.open('', '_blank');
+    if (!win) {
+      alert('გთხოვთ დაუშვათ pop-up ფანჯრები ბრაუზერში');
+      return;
+    }
+    const contentHtml = paperRef.current ? paperRef.current.innerHTML : '';
+    win.document.write(`<!DOCTYPE html>
+<html lang="ka">
+<head>
+  <meta charset="utf-8">
+  <title>${file.original_name}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #d9d9d9; font-family: 'Calibri', 'Sylfaen', 'Noto Sans Georgian', 'DejaVu Sans', sans-serif; font-size: 11pt; color: #000; }
+    .wrap { padding: 24px; overflow: auto; min-height: 100vh; display: flex; flex-direction: column; align-items: center; }
+    .sheet { background: #fff; width: 792pt; min-height: 612pt; margin: 0 auto 24px; padding: 0 0 0 72pt; box-shadow: 0 1px 6px rgba(0,0,0,.35); position: relative; }
+    .frame { border-collapse: collapse; table-layout: fixed; width: 648pt; }
+    .frame>thead>tr>td, .frame>tbody>tr>td, .frame>tfoot>tr>td { padding: 0; border: 0; vertical-align: top; }
+    .hdr { width: 648pt; min-height: 40.5pt; padding-top: 27pt; }
+    .ftr { width: 648pt; min-height: 58.5pt; }
+    p { margin: 0; white-space: pre-wrap; overflow-wrap: break-word; }
+    td p { overflow-wrap: anywhere; }
+    img { max-width: none; }
+    thead { display: table-header-group; }
+    tfoot { display: table-footer-group; }
+    table { border-collapse: collapse; width: 100%; }
+    td, th { border: 0.5pt solid #BFBFBF; padding: 3pt 5.4pt; font-size: 9pt; }
+    @page { size: 792pt 612pt; margin: 0; }
+    @media print {
+      body { background: #fff; }
+      .wrap { padding: 0; overflow: visible; }
+      .sheet { box-shadow: none; margin: 0; width: auto; min-height: 0; padding: 0 0 0 72pt; }
+      tr { break-inside: avoid; }
+      * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  ${contentHtml}
+</body>
+</html>`);
+    win.document.close();
   };
 
   const isCurriculumPlan = moduleData?.is_curriculum_plan;
@@ -196,7 +242,7 @@ export default function DocumentReader({ file, moduleData, onClose }) {
     );
   }, [isMaterialResources, moduleData, resourceSearch]);
 
-  return (
+  const modalContent = (
     <div className="word-viewer-overlay" ref={overlayRef}>
       {/* ზედა ხელსაწყოების ზოლი (Toolbar) */}
       <header className="word-viewer-toolbar no-print">
@@ -294,6 +340,11 @@ export default function DocumentReader({ file, moduleData, onClose }) {
             title={isFullscreen ? "სრული ეკრანიდან გამოსვლა" : "სრულ ეკრანზე გაშლა"}
           >
             {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+
+          <button className="word-btn" onClick={handleOpenNewWindow} title="ცალკე სრულ გვერდზე / ახალ ტაბში გახსნა">
+            <ExternalLink size={16} />
+            <span>ახალ ტაბში</span>
           </button>
 
           <button className="word-btn print-btn" onClick={handlePrint} title="ბეჭდვა / PDF">
@@ -1032,4 +1083,8 @@ export default function DocumentReader({ file, moduleData, onClose }) {
       </main>
     </div>
   );
+
+  return typeof document !== 'undefined'
+    ? createPortal(modalContent, document.body)
+    : modalContent;
 }

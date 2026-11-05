@@ -874,15 +874,21 @@ input, select, textarea {
    Word Document Reader (სრულეკრანიანი თანამედროვე ხედი)
    ============================================================== */
 .word-viewer-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  background: #1e293b;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  height: 100dvh !important;
+  z-index: 99999999 !important;
+  background: #1e293b !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 /* Toolbar */
@@ -1079,16 +1085,18 @@ input, select, textarea {
 /* Document Body & Scroll */
 .word-viewer-body {
   flex: 1 1 auto;
-  overflow-y: scroll;
-  overflow-x: auto;
-  padding: 36px 20px 60px;
-  background: #0f172a;
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  padding: 24px 16px 60px;
+  background: #525659;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
   scroll-behavior: smooth;
   -webkit-overflow-scrolling: touch;
+  width: 100% !important;
+  box-sizing: border-box;
 }
 
 /* Custom Scrollbar */
@@ -1450,6 +1458,119 @@ input, select, textarea {
     page-break-after: auto;
   }
 }
+
+/* ==============================================================
+   Word Document 1:1 Sheet & Frame Styles (დანართი 1 სტანდარტი)
+   ============================================================== */
+.wrap {
+  padding: 24px;
+  overflow: auto;
+  background: #d9d9d9;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.sheet {
+  background: #fff;
+  width: 792pt;
+  min-height: 612pt;
+  margin: 0 auto 24px;
+  padding: 0 0 0 72pt;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.35);
+  position: relative;
+  font-family: 'Calibri', 'Sylfaen', 'Noto Sans Georgian', 'DejaVu Sans', sans-serif;
+  font-size: 10pt;
+  color: #000;
+  box-sizing: border-box;
+}
+
+.frame {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 648pt;
+}
+
+.frame > thead > tr > td,
+.frame > tbody > tr > td,
+.frame > tfoot > tr > td {
+  padding: 0;
+  border: 0;
+  vertical-align: top;
+}
+
+.hdr {
+  width: 648pt;
+  min-height: 40.5pt;
+  padding-top: 27pt;
+}
+
+.ftr {
+  width: 648pt;
+  min-height: 58.5pt;
+}
+
+.sheet p {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.sheet td p {
+  overflow-wrap: anywhere;
+}
+
+.sheet img {
+  max-width: none;
+}
+
+.sheet thead {
+  display: table-header-group;
+}
+
+.sheet tfoot {
+  display: table-footer-group;
+}
+
+.word-doc-table {
+  border-collapse: collapse !important;
+  width: 100% !important;
+  margin-top: 6pt;
+  margin-bottom: 14pt;
+  font-family: 'Calibri', 'Sylfaen', 'Noto Sans Georgian', 'DejaVu Sans', sans-serif;
+}
+
+.word-doc-table th,
+.word-doc-table td {
+  border: 0.5pt solid #BFBFBF !important;
+  vertical-align: top !important;
+  padding: 3pt 5.4pt !important;
+  font-size: 9pt !important;
+  line-height: 1.25 !important;
+  color: #000 !important;
+}
+
+.word-doc-table th,
+.word-doc-table .table-header-cell {
+  background-color: #f8fafc;
+  font-weight: bold;
+}
+
+.doc-cell-label {
+  background-color: #fafafa;
+  font-weight: bold;
+  width: 121.2pt;
+  color: #222;
+}
+
+.doc-cell-val {
+  background-color: #fff;
+  width: 526.3pt;
+}
+
 
 /* ==============================================================
    Word Document 1:1 Sheet & Frame Styles (დანართი 1 სტანდარტი)

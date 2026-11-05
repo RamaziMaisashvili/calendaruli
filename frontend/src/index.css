@@ -2197,6 +2197,44 @@ body.document-reader-open {
   border: 1px solid #cbd5e1;
 }
 
+/* Role Pills */
+.role-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.role-pill.pill-admin {
+  background: #fdf2f8;
+  color: #db2777;
+  border: 1px solid #fbcfe8;
+}
+
+.role-pill.pill-teacher {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.role-pill.pill-student {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.crud-stat-pill.stat-teacher {
+  border-left: 3px solid #2563eb;
+}
+
+.crud-stat-pill.stat-admin {
+  border-left: 3px solid #db2777;
+}
+
 .action-btns {
   display: flex;
   align-items: center;

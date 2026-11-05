@@ -179,9 +179,12 @@ export const api = {
     });
   },
 
-  // მასწავლებლების CRUD
-  getTeachers: async (search = '') => {
-    const query = search ? `?q=${encodeURIComponent(search)}` : '';
+  // მასწავლებლებისა და მომხმარებლების CRUD
+  getTeachers: async (search = '', role = '') => {
+    const params = new URLSearchParams();
+    if (search) params.append('q', search);
+    if (role && role !== 'all') params.append('role', role);
+    const query = params.toString() ? `?${params.toString()}` : '';
     return request(`/api/teachers${query}`, {
       method: 'GET',
     });

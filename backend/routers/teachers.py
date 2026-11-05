@@ -37,6 +37,7 @@ class TeacherCreateRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=190)
     email: Optional[str] = ""
     phone: Optional[str] = ""
+    role: Optional[str] = "teacher"
     password: Optional[str] = "1234"
     is_active: Optional[bool] = True
 
@@ -45,16 +46,18 @@ class TeacherUpdateRequest(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    role: Optional[str] = None
     password: Optional[str] = None
     is_active: Optional[bool] = None
 
 @router.get("")
 def list_teachers(
     q: Optional[str] = Query(None, description="ძებნა სახელით, მომხმარებლით, მეილით ან ტელეფონით"),
+    role: Optional[str] = Query(None, description="როლის ფილტრი (teacher, admin, student, all)"),
     user: dict = Depends(get_current_user)
 ):
     """
-    მასწავლებლების სიის წამოღება (ძებნითა და ფილტრაციით)
+    მასწავლებლებისა და მომხმარებლების სიის წამოღება (ძებნითა და როლის ფილტრაციით)
     """
     ensure_user_columns()
     conn = get_connection()
@@ -72,8 +75,12 @@ def list_teachers(
             if has_phone:
                 select_fields += ", phone"
 
-            query = f"SELECT {select_fields} FROM api_users WHERE role = 'teacher'"
             params = []
+            if role and role != "all":
+                query = f"SELECT {select_fields} FROM api_users WHERE role = %s"
+                params.append(role.strip().lower())
+            else:
+                query = f"SELECT {select_fields} FROM api_users WHERE 1=1"
 
             if q and q.strip():
                 search_term = f"%{q.strip().lower()}%"
@@ -164,6 +171,9 @@ def create_teacher(data: TeacherCreateRequest, user: dict = Depends(get_current_
     clean_name = data.name.strip()
     clean_email = (data.email or "").strip()
     clean_phone = (data.phone or "").strip()
+    clean_role = (data.role or "teacher").strip().lower()
+    if clean_role not in ["admin", "teacher", "student"]:
+        clean_role = "teacher"
     raw_pwd = (data.password or "").strip() or "1234"
 
     conn = get_connection()
@@ -183,7 +193,7 @@ def create_teacher(data: TeacherCreateRequest, user: dict = Depends(get_current_
             has_phone = bool(cur.fetchone())
 
             cols = ["username", "name", "role", "password_hash", "is_active", "failed_attempts"]
-            vals = [clean_username, clean_name, "teacher", pwd_hash, 1 if data.is_active else 0, 0]
+            vals = [clean_username, clean_name, clean_role, pwd_hash, 1 if data.is_active else 0, 0]
             placeholders = ["%s"] * len(cols)
 
             if has_email:
@@ -202,14 +212,14 @@ def create_teacher(data: TeacherCreateRequest, user: dict = Depends(get_current_
 
             return {
                 "success": True,
-                "message": "მასწავლებელი წარმატებით დაემატა",
+                "message": "მომხმარებელი წარმატებით დაემატა",
                 "teacher": {
                     "id": new_id,
                     "username": clean_username,
                     "name": clean_name,
                     "email": clean_email,
                     "phone": clean_phone,
-                    "role": "teacher",
+                    "role": clean_role,
                     "is_active": data.is_active
                 }
             }
@@ -260,6 +270,15 @@ def update_teacher(teacher_id: int, data: TeacherUpdateRequest, user: dict = Dep
             if has_phone and data.phone is not None:
                 updates.append("phone = %s")
                 params.append(data.phone.strip())
+
+            if data.role is not None:
+                new_role = data.role.strip().lower()
+                if new_role not in ["admin", "teacher", "student"]:
+                    raise HTTPException(status_code=400, detail="როლი უნდა იყოს ერთ-ერთი: teacher, admin, student")
+                if teacher_id == user["id"] and new_role != "admin" and existing.get("role") == "admin":
+                    raise HTTPException(status_code=400, detail="საკუთარი ანგარიშისთვის ადმინისტრატორის როლის შეცვლა შეუძლებელია")
+                updates.append("role = %s")
+                params.append(new_role)
 
             if data.password is not None and data.password.strip():
                 updates.append("password_hash = %s")
@@ -314,3 +333,4 @@ def delete_teacher(teacher_id: int, user: dict = Depends(get_current_user)):
             }
     finally:
         conn.close()
+

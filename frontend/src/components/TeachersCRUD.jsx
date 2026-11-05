@@ -19,6 +19,7 @@ export default function TeachersCRUD() {
   // ფილტრაცია და ძებნა
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all'); // all, active, inactive
+  const [roleFilter, setRoleFilter] = useState('all'); // all, teacher, admin, student
 
   // მოდალის მდგომარეობა
   const [modalOpen, setModalOpen] = useState(false);
@@ -36,6 +37,7 @@ export default function TeachersCRUD() {
     username: '',
     phone: '',
     email: '',
+    role: 'teacher',
     password: '',
     is_active: true
   });
@@ -45,12 +47,12 @@ export default function TeachersCRUD() {
     setLoading(true);
     setError(null);
     try {
-      const res = await api.getTeachers(term);
+      const res = await api.getTeachers(term, 'all');
       if (res.success) {
         setTeachers(res.teachers || []);
       }
     } catch (err) {
-      setError(err.message || 'მასწავლებლების სიის ჩატვირთვა ვერ მოხერხდა');
+      setError(err.message || 'მომხმარებლების სიის ჩატვირთვა ვერ მოხერხდა');
     } finally {
       setLoading(false);
     }
@@ -71,6 +73,9 @@ export default function TeachersCRUD() {
   // ძებნა და ფილტრაცია
   const filteredTeachers = useMemo(() => {
     return teachers.filter(t => {
+      // როლის ფილტრი
+      if (roleFilter !== 'all' && (t.role || 'teacher') !== roleFilter) return false;
+
       // სტატუსის ფილტრი
       if (statusFilter === 'active' && !t.is_active) return false;
       if (statusFilter === 'inactive' && t.is_active) return false;
@@ -82,17 +87,20 @@ export default function TeachersCRUD() {
         const uMatch = (t.username || '').toLowerCase().includes(q);
         const pMatch = (t.phone || '').includes(q);
         const eMatch = (t.email || '').toLowerCase().includes(q);
-        return nMatch || uMatch || pMatch || eMatch;
+        const rMatch = (t.role || '').toLowerCase().includes(q);
+        return nMatch || uMatch || pMatch || eMatch || rMatch;
       }
       return true;
     });
-  }, [teachers, searchTerm, statusFilter]);
+  }, [teachers, searchTerm, statusFilter, roleFilter]);
 
   // სტატისტიკა
   const stats = useMemo(() => {
     const total = teachers.length;
     const active = teachers.filter(t => t.is_active).length;
-    return { total, active, inactive: total - active };
+    const teachersCount = teachers.filter(t => (t.role || 'teacher') === 'teacher').length;
+    const adminsCount = teachers.filter(t => t.role === 'admin').length;
+    return { total, active, inactive: total - active, teachersCount, adminsCount };
   }, [teachers]);
 
   // მოდალის გახსნა შექმნისთვის
@@ -103,6 +111,7 @@ export default function TeachersCRUD() {
       username: '',
       phone: '',
       email: '',
+      role: 'teacher',
       password: '1234',
       is_active: true
     });
@@ -118,6 +127,7 @@ export default function TeachersCRUD() {
       username: t.username || '',
       phone: t.phone || '',
       email: t.email || '',
+      role: t.role || 'teacher',
       password: '', // რედაქტირებისას ცარიელია, თუ არ შეცვლის
       is_active: t.is_active
     });
@@ -177,13 +187,14 @@ export default function TeachersCRUD() {
           username: formData.username.trim().toLowerCase(),
           phone: formData.phone.trim(),
           email: formData.email.trim(),
+          role: formData.role || 'teacher',
           is_active: formData.is_active
         };
         if (formData.password.trim()) {
           payload.password = formData.password.trim();
         }
         await api.updateTeacher(editingTeacher.id, payload);
-        setSuccessMsg(`მასწავლებელი „${formData.name}“ წარმატებით განახლდა`);
+        setSuccessMsg(`მომხმარებელი „${formData.name}“ წარმატებით განახლდა`);
       } else {
         // შექმნა
         const payload = {
@@ -191,11 +202,12 @@ export default function TeachersCRUD() {
           username: formData.username.trim().toLowerCase(),
           phone: formData.phone.trim(),
           email: formData.email.trim(),
+          role: formData.role || 'teacher',
           password: formData.password.trim() || '1234',
           is_active: formData.is_active
         };
         await api.createTeacher(payload);
-        setSuccessMsg(`ახალი მასწავლებელი „${formData.name}“ წარმატებით დაემატა`);
+        setSuccessMsg(`ახალი მომხმარებელი „${formData.name}“ წარმატებით დაემატა`);
       }
 
       setModalOpen(false);
@@ -204,6 +216,19 @@ export default function TeachersCRUD() {
       setFormError(err.message || 'ოპერაციის შესრულება ვერ მოხერხდა');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // როლის ბეჯი
+  const getRoleBadge = (role) => {
+    switch (role) {
+      case 'admin':
+        return <span className="role-pill pill-admin">ადმინისტრატორი</span>;
+      case 'student':
+        return <span className="role-pill pill-student">სტუდენტი</span>;
+      case 'teacher':
+      default:
+        return <span className="role-pill pill-teacher">მასწავლებელი</span>;
     }
   };
 
@@ -271,8 +296,16 @@ export default function TeachersCRUD() {
       {/* სტატისტიკის პანელები */}
       <div className="crud-stats-row">
         <div className="crud-stat-pill">
-          <span className="stat-label">სულ მასწავლებელი:</span>
+          <span className="stat-label">სულ:</span>
           <strong className="stat-value">{stats.total}</strong>
+        </div>
+        <div className="crud-stat-pill stat-teacher">
+          <span className="stat-label">მასწავლებელი:</span>
+          <strong className="stat-value">{stats.teachersCount}</strong>
+        </div>
+        <div className="crud-stat-pill stat-admin">
+          <span className="stat-label">ადმინი:</span>
+          <strong className="stat-value">{stats.adminsCount}</strong>
         </div>
         <div className="crud-stat-pill stat-active">
           <span className="stat-label">აქტიური:</span>
@@ -307,7 +340,7 @@ export default function TeachersCRUD() {
           <input
             type="text"
             className="crud-search-input"
-            placeholder="ძებნა სახელით, username-ით, ტელეფონით, მეილით..."
+            placeholder="ძებნა სახელით, username-ით, ტელეფონით, მეილით, როლით..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -316,6 +349,19 @@ export default function TeachersCRUD() {
               <X size={15} />
             </button>
           )}
+        </div>
+
+        <div className="crud-status-select-wrap">
+          <select 
+            className="crud-select" 
+            value={roleFilter} 
+            onChange={(e) => setRoleFilter(e.target.value)}
+          >
+            <option value="all">ყველა როლი</option>
+            <option value="teacher">მასწავლებლები</option>
+            <option value="admin">ადმინისტრატორები</option>
+            <option value="student">სტუდენტები</option>
+          </select>
         </div>
 
         <div className="crud-status-select-wrap">
@@ -336,21 +382,21 @@ export default function TeachersCRUD() {
         {loading ? (
           <div className="crud-loading">
             <RefreshCw size={24} className="spin" />
-            <p>იტვირთება მასწავლებლების მონაცემები...</p>
+            <p>იტვირთება მონაცემები...</p>
           </div>
         ) : filteredTeachers.length === 0 ? (
           <div className="crud-empty">
             <Users size={40} className="empty-icon" />
-            <h3>მასწავლებლები ვერ მოიძებნა</h3>
+            <h3>მომხმარებლები ვერ მოიძებნა</h3>
             <p>
-              {searchTerm || statusFilter !== 'all' 
-                ? 'მითითებული საძიებო პარამეტრებით მასწავლებელი ვერ მოიძებნა.' 
-                : 'ბაზაში მასწავლებლები ჯერჯერობით შეყვანილი არ არის.'}
+              {searchTerm || statusFilter !== 'all' || roleFilter !== 'all'
+                ? 'მითითებული საძიებო პარამეტრებით მომხმარებელი ვერ მოიძებნა.' 
+                : 'ბაზაში მომხმარებლები ჯერჯერობით შეყვანილი არ არის.'}
             </p>
             {isAdmin && !searchTerm && (
               <button className="btn-primary-add" onClick={handleOpenCreate} style={{ marginTop: '12px' }}>
                 <UserPlus size={16} />
-                <span>პირველი მასწავლებლის დამატება</span>
+                <span>ახალი მომხმარებლის დამატება</span>
               </button>
             )}
           </div>
@@ -361,7 +407,8 @@ export default function TeachersCRUD() {
                 <tr>
                   <th style={{ width: '45px' }}>#</th>
                   <th>სახელი და გვარი</th>
-                  <th>მომხმარებელი (Username)</th>
+                  <th>როლი</th>
+                  <th>მომხმარებელი</th>
                   <th>ტელეფონი</th>
                   <th>ელ.ფოსტა</th>
                   <th>სტატუსი</th>
@@ -379,9 +426,11 @@ export default function TeachersCRUD() {
                         </div>
                         <div>
                           <div className="teacher-name-text">{t.name}</div>
-                          <div className="teacher-role-tag">პროფესიული მასწავლებელი</div>
                         </div>
                       </div>
+                    </td>
+                    <td>
+                      {getRoleBadge(t.role)}
                     </td>
                     <td>
                       <span className="username-badge">
@@ -509,6 +558,24 @@ export default function TeachersCRUD() {
                   <span className="form-hint">გამოიყენება სისტემაში შესვლისთვის</span>
                 </div>
 
+                <div className="form-group">
+                  <label>როლი სისტემაში *</label>
+                  <div className="input-with-icon">
+                    <Shield size={16} className="input-icon" />
+                    <select
+                      className="form-input"
+                      value={formData.role}
+                      onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                      required
+                    >
+                      <option value="teacher">მასწავლებელი (Teacher)</option>
+                      <option value="admin">ადმინისტრატორი (Admin)</option>
+                      <option value="student">სტუდენტი (Student)</option>
+                    </select>
+                  </div>
+                  <span className="form-hint">განსაზღვრავს მომხმარებლის უფლებებს სისტემაში</span>
+                </div>
+
                 <div className="form-row">
                   <div className="form-group" style={{ flex: 1 }}>
                     <label>ტელეფონი</label>
@@ -631,3 +698,4 @@ export default function TeachersCRUD() {
     </div>
   );
 }
+

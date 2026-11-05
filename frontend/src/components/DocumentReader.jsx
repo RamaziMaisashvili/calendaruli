@@ -8,6 +8,7 @@ import {
 import { api } from '../services/api';
 import Document from './Document';
 import { LETTERHEAD_BASE64 } from './letterhead';
+import { SCHOOL22_LOGO_BASE64 } from './school22_logo';
 
 export default function DocumentReader({ file, moduleData, onClose }) {
   const overlayRef = useRef(null);
@@ -303,7 +304,12 @@ export default function DocumentReader({ file, moduleData, onClose }) {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px', flexWrap: 'wrap' }}>
               {is22School ? (
                 <span className="org-badge org-22" title="სსიპ - ნესტორ გოქაძის სახელობის ქალაქ ქუთაისის N 22 საჯარო სკოლა">
-                  🏫 22-ე საჯარო სკოლა
+                  <img 
+                    src={SCHOOL22_LOGO_BASE64} 
+                    alt="22 სკოლა" 
+                    style={{ width: '15px', height: '15px', objectFit: 'contain', verticalAlign: 'middle', marginRight: '5px' }} 
+                  />
+                  22-ე საჯარო სკოლა
                 </span>
               ) : hasWeaBanner ? (
                 <span className="org-badge org-wea" title="შპს მსოფლიო განათლების აკადემია (WEA)">
@@ -787,16 +793,20 @@ export default function DocumentReader({ file, moduleData, onClose }) {
                             </p>
                           ) : is22School ? (
                             <div style={{
-                              paddingTop: "20pt",
-                              paddingBottom: "10pt",
+                              paddingTop: "14pt",
+                              paddingBottom: "8pt",
                               marginBottom: "12pt",
                               borderBottom: "2px solid #1e3a8a",
                               display: "flex",
                               justifyContent: "space-between",
                               alignItems: "center"
                             }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: "10pt" }}>
-                                <div style={{ fontSize: "20pt", lineHeight: 1 }}>🏫</div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "12pt" }}>
+                                <img
+                                  src={SCHOOL22_LOGO_BASE64}
+                                  alt="22-ე საჯარო სკოლის ლოგო"
+                                  style={{ width: "50pt", height: "50pt", objectFit: "contain" }}
+                                />
                                 <div>
                                   <div style={{ fontSize: "11pt", fontWeight: "bold", color: "#0f172a", fontFamily: "'Calibri','Sylfaen',sans-serif" }}>
                                     სსიპ - ნესტორ გოქაძის სახელობის ქალაქ ქუთაისის N 22 საჯარო სკოლა

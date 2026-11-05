@@ -407,7 +407,7 @@ export default function TeachersCRUD() {
                 <tr>
                   <th style={{ width: '45px' }}>#</th>
                   <th>სახელი და გვარი</th>
-                  <th>როლი</th>
+                  
                   <th>მომხმარებელი</th>
                   <th>ტელეფონი</th>
                   <th>ელ.ფოსტა</th>
@@ -426,12 +426,10 @@ export default function TeachersCRUD() {
                         </div>
                         <div>
                           <div className="teacher-name-text">{t.name}</div>
+                          {getRoleBadge(t.role)}
                         </div>
                       </div>
-                    </td>
-                    <td>
-                      {getRoleBadge(t.role)}
-                    </td>
+                    </td>                    
                     <td>
                       <span className="username-badge">
                         @{t.username}

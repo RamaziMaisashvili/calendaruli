@@ -7,6 +7,7 @@ import {
   Search, Filter, Building2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from 'lucide-react';
 import DocumentReader from './DocumentReader';
+import { SCHOOL22_LOGO_BASE64 } from './school22_logo';
 
 export default function FileUpload() {
   const { user } = useAuth();
@@ -563,6 +564,13 @@ export default function FileUpload() {
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
                                 <span className={`org-badge ${cls.orgCode === '22_skola' ? 'org-22' : cls.orgCode === 'wea' ? 'org-wea' : 'org-other'}`}>
+                                  {cls.orgCode === '22_skola' && (
+                                    <img 
+                                      src={SCHOOL22_LOGO_BASE64} 
+                                      alt="22 სკოლა" 
+                                      style={{ width: '13px', height: '13px', objectFit: 'contain', verticalAlign: 'middle', marginRight: '4px' }} 
+                                    />
+                                  )}
                                   {cls.orgShort}
                                 </span>
                                 <span className={`module-badge-tag ${cls.badgeClass}`}>

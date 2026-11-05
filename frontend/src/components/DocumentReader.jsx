@@ -5,6 +5,8 @@ import {
   Package, Calendar, Clock, Search, Award
 } from 'lucide-react';
 import { api } from '../services/api';
+import Document from './Document';
+import { LETTERHEAD_BASE64 } from './letterhead';
 
 export default function DocumentReader({ file, moduleData, onClose }) {
   const overlayRef = useRef(null);
@@ -84,6 +86,12 @@ export default function DocumentReader({ file, moduleData, onClose }) {
   const outcomes = moduleData?.outcomes || [];
   const hasModule = moduleData?.has_module;
   const docElements = moduleData?.doc_elements || [];
+
+  const isMarkupModule = Boolean(
+    file?.original_name?.includes('მარკირება') || 
+    file?.original_name?.includes('დანართი 1') ||
+    file?.original_name?.includes('დანართი_1')
+  );
 
   // მოდულის ტიპის განსაზღვრა (1=პროფესიული, 2=ზოგადი, 3=ინტეგრირებული -> სიტყვებით გამოტანა)
   const resolveTypeName = (val) => {
@@ -307,17 +315,17 @@ export default function DocumentReader({ file, moduleData, onClose }) {
 
       {/* დოკუმენტის სამუშაო სივრცე (გამართული სქროლით) */}
       <main className="word-viewer-body">
-        <div 
-          className={`word-paper-sheet ${isWideView ? 'wide-mode' : 'a4-mode'}`} 
-          ref={paperRef}
-          style={{
-            zoom: zoomLevel !== 100 ? `${zoomLevel}%` : undefined
-          }}
-        >
-          {/* ==============================================================
+        {isCurriculumPlan && moduleData?.plans ? (
+          /* ==============================================================
              1. სასწავლო გეგმა (Curriculum Plan Excel)
-             ============================================================== */}
-          {isCurriculumPlan && moduleData?.plans ? (
+             ============================================================== */
+          <div 
+            className={`word-paper-sheet ${isWideView ? 'wide-mode' : 'a4-mode'}`} 
+            ref={paperRef}
+            style={{
+              zoom: zoomLevel !== 100 ? `${zoomLevel}%` : undefined
+            }}
+          >
             <div className="curriculum-document excel-curriculum-view">
               <div style={{ textAlign: 'center', marginBottom: '24px' }}>
                 <span className="doc-type-badge general" style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}>
@@ -445,10 +453,18 @@ export default function DocumentReader({ file, moduleData, onClose }) {
                 </table>
               </div>
             </div>
-          ) : isMaterialResources && moduleData?.modules ? (
-            /* ==============================================================
-               2. მატერიალური რესურსები (Material Resources Excel)
-               ============================================================== */
+          </div>
+        ) : isMaterialResources && moduleData?.modules ? (
+          /* ==============================================================
+             2. მატერიალური რესურსები (Material Resources Excel)
+             ============================================================== */
+          <div 
+            className={`word-paper-sheet ${isWideView ? 'wide-mode' : 'a4-mode'}`} 
+            ref={paperRef}
+            style={{
+              zoom: zoomLevel !== 100 ? `${zoomLevel}%` : undefined
+            }}
+          >
             <div className="curriculum-document excel-resources-view">
               <div style={{ textAlign: 'center', marginBottom: '24px' }}>
                 <span className="doc-type-badge general" style={{ background: '#fef3c7', color: '#92400e', borderColor: '#fde68a' }}>
@@ -618,118 +634,401 @@ export default function DocumentReader({ file, moduleData, onClose }) {
                 </div>
               ))}
             </div>
-          ) : docElements && docElements.length > 0 ? (
-            /* ==============================================================
-               3. 1:1 ვორდის ზუსტი ასლი (ყველა სათაურით, აბზაცით და ცხრილით)
-               ============================================================== */
-            <div className="curriculum-document word-exact-layout">
-              {/* მოდულის ტიპის საინფორმაციო ბეიჯი */}
-              <div style={{ textAlign: 'center', marginBottom: '20px' }} className="no-print">
-                <span className={`doc-type-badge ${typeConfig.badgeClass}`}>
-                  {typeConfig.title}
-                </span>
-              </div>
-
-              {docElements.map((el, elIdx) => {
-                if (el.type === 'p') {
-                  const isTitle = el.is_bold && (el.align === 'center' || el.text.startsWith('მოდული:'));
-                  const isSchoolHeader = el.text.includes('სსიპ') || el.text.includes('სკოლა');
-                  
-                  return (
-                    <p
-                      key={elIdx}
-                      style={{
-                        textAlign: el.align || 'left',
-                        fontWeight: el.is_bold ? '700' : '400',
-                        fontSize: isTitle ? '17px' : (isSchoolHeader ? '15px' : '13.5px'),
-                        marginTop: isTitle ? '14px' : '4px',
-                        marginBottom: isTitle ? '12px' : '8px',
-                        lineHeight: '1.6',
-                        color: isTitle ? '#0f172a' : '#1e293b'
-                      }}
-                    >
-                      {el.text}
-                    </p>
-                  );
-                }
-
-                if (el.type === 'table') {
-                  return (
-                    <div key={elIdx} className="table-responsive-box">
-                      <table className="word-exact-table">
-                        <tbody>
-                          {el.rows.map((row, rIdx) => {
-                            const isHeaderRow = rIdx === 0;
-                            return (
-                              <tr key={rIdx}>
-                                {row.map((cell, cIdx) => (
-                                  <td
-                                    key={cIdx}
-                                    colSpan={cell.col_span || 1}
-                                    className={isHeaderRow ? 'table-header-cell' : 'table-data-cell'}
-                                  >
-                                    {cell.text}
-                                  </td>
-                                ))}
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                }
-                return null;
-              })}
-            </div>
-          ) : hasModule && mod ? (
-            /* 4. სარეზერვო ხედი ბაზიდან */
-            <div className="curriculum-document">
-              <div className="doc-main-header">
-                <div className={`doc-type-badge ${isIntegrated ? 'integrated' : 'vocational'}`}>
-                  {isIntegrated ? 'ინტეგრირებული მოდული' : 'პროფესიული მოდული'}
-                </div>
-                <h1 className="doc-title">{mod.module_name}</h1>
-                {mod.registration_number && (
-                  <div className="doc-meta-bar">
-                    <span><strong>რეგისტრაციის №:</strong> {mod.registration_number}</span>
-                    {mod.version_date && <span> • <strong>ვერსია:</strong> {mod.version_date}</span>}
-                    {mod.credits && <span> • <strong>კრედიტი:</strong> {mod.credits}</span>}
-                    {mod.hours_total && <span> • <strong>საათები:</strong> {mod.hours_total} სთ</span>}
-                  </div>
-                )}
-              </div>
-
-              {/* სტანდარტული ცხრილი */}
-              <table className="word-exact-table" style={{ marginTop: '20px' }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: '8%', textAlign: 'center' }}>№</th>
-                    <th style={{ width: '32%' }}>სწავლის შედეგები</th>
-                    <th style={{ width: '40%' }}>შესრულების კრიტერიუმები</th>
-                    <th style={{ width: '20%' }}>შეფასების მიმართულება</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {outcomes.map((item, idx) => (
-                    <tr key={idx}>
-                      <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{item.outcome_number}</td>
-                      <td><strong>{item.outcome_name}</strong></td>
-                      <td style={{ whiteSpace: 'pre-wrap' }}>{item.criteria}</td>
-                      <td>{item.assessment_direction || '—'}</td>
+          </div>
+        ) : isMarkupModule ? (
+          /* ==============================================================
+             3. დანართი 1 (ვებ გვერდის მარკირება - ზუსტი ასლი React კომპონენტი)
+             ============================================================== */
+          <div 
+            ref={paperRef}
+            style={{
+              zoom: zoomLevel !== 100 ? `${zoomLevel}%` : undefined,
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'center'
+            }}
+          >
+            <Document />
+          </div>
+        ) : (
+          /* ==============================================================
+             4. 1:1 Word დოკუმენტის ზუსტი ასლი (დანართი 1-ის შაბლონით)
+             ============================================================== */
+          <div 
+            ref={paperRef}
+            style={{
+              zoom: zoomLevel !== 100 ? `${zoomLevel}%` : undefined,
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'center'
+            }}
+          >
+            <div className="wrap">
+              <div className="sheet">
+                <table className="frame">
+                  <thead>
+                    <tr>
+                      <td>
+                        <div className="hdr">
+                          <p style={{ textAlign: "left", lineHeight: "normal", margin: 0 }}>
+                            <img
+                              src={LETTERHEAD_BASE64}
+                              alt=""
+                              style={{ width: "648pt", height: "62.2pt", verticalAlign: "baseline" }}
+                            />
+                          </p>
+                        </div>
+                      </td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        {docElements && docElements.length > 0 ? (
+                          /* 1:1 ასლი docElements-დან (Word-ის ყველა ორიგინალი აბზაცი და ცხრილი) */
+                          <>
+                            {docElements.map((el, elIdx) => {
+                              if (el.type === 'p') {
+                                const isTitle = el.is_bold && (el.align === 'center' || el.text.includes('მოდული') || el.text.includes('სსიპ') || el.text.includes('დანართი'));
+                                return (
+                                  <p
+                                    key={elIdx}
+                                    style={{
+                                      textAlign: el.align || 'left',
+                                      paddingBottom: isTitle ? '6pt' : '4pt',
+                                      lineHeight: 1.25,
+                                      fontFamily: "'Calibri','Sylfaen','Noto Sans Georgian','DejaVu Sans',sans-serif",
+                                      fontSize: isTitle ? '10pt' : '9pt',
+                                      fontWeight: el.is_bold ? 'bold' : 'normal',
+                                      color: el.is_bold && el.align === 'center' ? '#595959' : '#000000',
+                                      marginBottom: isTitle ? '6pt' : '3pt'
+                                    }}
+                                  >
+                                    {el.text}
+                                  </p>
+                                );
+                              }
+                              if (el.type === 'table') {
+                                return (
+                                  <table
+                                    key={elIdx}
+                                    style={{
+                                      borderCollapse: 'collapse',
+                                      width: '100%',
+                                      tableLayout: 'auto',
+                                      marginBottom: '14pt',
+                                      fontFamily: "'Calibri','Sylfaen','Noto Sans Georgian','DejaVu Sans',sans-serif"
+                                    }}
+                                  >
+                                    <tbody>
+                                      {el.rows.map((row, rIdx) => {
+                                        const isHeader = rIdx === 0 && el.rows.length > 1;
+                                        return (
+                                          <tr key={rIdx}>
+                                            {row.map((cell, cIdx) => (
+                                              <td
+                                                key={cIdx}
+                                                colSpan={cell.col_span || 1}
+                                                style={{
+                                                  border: '0.5pt solid #BFBFBF',
+                                                  verticalAlign: 'top',
+                                                  padding: '3pt 5.4pt',
+                                                  backgroundColor: isHeader ? '#f8fafc' : '#ffffff',
+                                                  fontWeight: isHeader ? 'bold' : 'normal',
+                                                  textAlign: isHeader ? 'center' : 'left'
+                                                }}
+                                              >
+                                                <p style={{
+                                                  margin: 0,
+                                                  whiteSpace: 'pre-wrap',
+                                                  lineHeight: 1.24,
+                                                  fontFamily: "'Calibri','Sylfaen','Noto Sans Georgian','DejaVu Sans',sans-serif",
+                                                  fontSize: '9pt',
+                                                  color: '#000'
+                                                }}>
+                                                  {cell.text}
+                                                </p>
+                                              </td>
+                                            ))}
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                );
+                              }
+                              return null;
+                            })}
+                          </>
+                        ) : hasModule && mod ? (
+                          /* სტანდარტული Word შაბლონი ბაზიდან (ზოგადი + სტანდარტული + თემატიკა + საათები) */
+                          <>
+                            <p style={{ textAlign: "center", paddingBottom: "8pt", marginRight: "-72pt", lineHeight: 1.24, fontFamily: "'Calibri','Sylfaen','Noto Sans Georgian','DejaVu Sans',sans-serif", fontSize: "9pt", fontWeight: "bold", color: "#595959" }}>
+                              <span>მოდული</span>
+                            </p>
+                            
+                            <p style={{ textAlign: "left", paddingBottom: "10pt", marginLeft: "18pt", textIndent: "-9pt", lineHeight: 1.32, fontFamily: "'Calibri','Sylfaen','Noto Sans Georgian','DejaVu Sans',sans-serif", fontSize: "9pt" }}>
+                              <span style={{ fontWeight: "bold" }}>ზოგადი ჩანაწერები</span>
+                            </p>
+                            
+                            <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "auto", marginBottom: "16pt", fontFamily: "'Calibri','Sylfaen','Noto Sans Georgian','DejaVu Sans',sans-serif" }}>
+                              <colgroup>
+                                <col style={{ width: "121.2pt" }} />
+                                <col style={{ width: "526.3pt" }} />
+                              </colgroup>
+                              <tbody>
+                                <tr>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt", background: "#fafafa" }}>
+                                    <p style={{ fontSize: "9pt", fontWeight: "bold" }}>მოდულის სახელწოდება</p>
+                                  </td>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt" }}>
+                                    <p style={{ fontSize: "9pt" }}>{mod.module_name || file.original_name.replace(/\.[^/.]+$/, '')}</p>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt", background: "#fafafa" }}>
+                                    <p style={{ fontSize: "9pt", fontWeight: "bold" }}>სარეგისტრაციო ნომერი</p>
+                                  </td>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt" }}>
+                                    <p style={{ fontSize: "9pt" }}>{mod.registration_number || '—'}</p>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt", background: "#fafafa" }}>
+                                    <p style={{ fontSize: "9pt", fontWeight: "bold" }}>ვერსია № და თარიღი</p>
+                                  </td>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt" }}>
+                                    <p style={{ fontSize: "9pt" }}>{mod.version_date || '—'}</p>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt", background: "#fafafa" }}>
+                                    <p style={{ fontSize: "9pt", fontWeight: "bold" }}>მოცულობა კრედიტებში</p>
+                                  </td>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt" }}>
+                                    <p style={{ fontSize: "9pt" }}>{mod.credits || '—'}</p>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt", background: "#fafafa" }}>
+                                    <p style={{ fontSize: "9pt", fontWeight: "bold" }}>მოდულის განხორციელების წინაპირობა</p>
+                                  </td>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt" }}>
+                                    <p style={{ fontSize: "9pt" }}>{mod.prerequisites || 'წინაპირობის გარეშე'}</p>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt", background: "#fafafa" }}>
+                                    <p style={{ fontSize: "9pt", fontWeight: "bold" }}>მოდულის მიზანი</p>
+                                  </td>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt" }}>
+                                    <p style={{ fontSize: "9pt" }}>{mod.aim || '—'}</p>
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt", background: "#fafafa" }}>
+                                    <p style={{ fontSize: "9pt", fontWeight: "bold" }}>სწავლის შედეგები</p>
+                                  </td>
+                                  <td style={{ border: "0.5pt solid #BFBFBF", verticalAlign: "top", padding: "3pt 5.4pt" }}>
+                                    {outcomes.length > 0 ? (
+                                      <ol style={{ margin: 0, paddingLeft: "18px" }}>
+                                        {outcomes.map((o, oi) => (
+                                          <li key={oi} style={{ fontSize: "9pt", marginBottom: "3pt" }}>
+                                            {o.outcome_name || `სწავლის შედეგი ${o.outcome_number}`}
+                                          </li>
+                                        ))}
+                                      </ol>
+                                    ) : (
+                                      <p style={{ fontSize: "9pt" }}>—</p>
+                                    )}
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+
+                            {/* სტანდარტული ჩანაწერები */}
+                            <p style={{ textAlign: "left", paddingBottom: "10pt", marginLeft: "18pt", textIndent: "-9pt", lineHeight: 1.32, fontFamily: "'Calibri','Sylfaen','Noto Sans Georgian','DejaVu Sans',sans-serif", fontSize: "9pt", marginTop: "14pt" }}>
+                              <span style={{ fontWeight: "bold" }}>სტანდარტული ჩანაწერები</span>
+                            </p>
+
+                            <table style={{ borderCollapse: "collapse", width: "647.5pt", tableLayout: "auto", marginBottom: "16pt", fontFamily: "'Calibri','Sylfaen','Noto Sans Georgian','DejaVu Sans',sans-serif" }}>
+                              <thead>
+                                <tr style={{ background: "#f8fafc" }}>
+                                  <th style={{ width: "25pt", textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                    <p style={{ fontSize: "9pt", fontWeight: "bold" }}>№</p>
+                                  </th>
+                                  <th style={{ width: "140pt", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                    <p style={{ fontSize: "9pt", fontWeight: "bold" }}>სწავლის შედეგები</p>
+                                  </th>
+                                  <th style={{ width: "200pt", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                    <p style={{ fontSize: "9pt", fontWeight: "bold" }}>შესრულების კრიტერიუმები</p>
+                                  </th>
+                                  <th style={{ width: "160pt", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                    <p style={{ fontSize: "9pt", fontWeight: "bold" }}>კომპეტენციის პარამეტრების ფარგლები</p>
+                                  </th>
+                                  <th style={{ width: "85pt", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                    <p style={{ fontSize: "9pt", fontWeight: "bold" }}>შეფასების მიმართულება</p>
+                                  </th>
+                                  <th style={{ width: "35pt", textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                    <p style={{ fontSize: "9pt", fontWeight: "bold" }}>სწავლის შედეგის მოცულობა კრედიტებში</p>
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {outcomes.map((item, idx) => (
+                                  <tr key={idx}>
+                                    <td style={{ textAlign: "center", fontWeight: "bold", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                      <p style={{ fontSize: "9pt" }}>{item.outcome_number || (idx + 1)}</p>
+                                    </td>
+                                    <td style={{ border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                      <p style={{ fontSize: "9pt", fontWeight: "bold" }}>{item.outcome_name}</p>
+                                    </td>
+                                    <td style={{ border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                      <p style={{ fontSize: "9pt", whiteSpace: "pre-wrap" }}>{item.criteria}</p>
+                                    </td>
+                                    <td style={{ border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                      <p style={{ fontSize: "9pt", whiteSpace: "pre-wrap" }}>{item.parameters || item.scope || '—'}</p>
+                                    </td>
+                                    <td style={{ border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                      <p style={{ fontSize: "9pt" }}>{item.assessment_direction || '—'}</p>
+                                    </td>
+                                    <td style={{ textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                      <p style={{ fontSize: "9pt" }}>{item.credits || item.outcome_credits || '—'}</p>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+
+                            {/* თემატიკა და შეფასების მეთოდები (თუ არსებობს topics ან assessment_methods) */}
+                            {outcomes.some(o => o.topics || o.assessment_methods) && (
+                              <>
+                                <p style={{ textAlign: "left", paddingBottom: "10pt", marginLeft: "18pt", textIndent: "-9pt", lineHeight: 1.32, fontFamily: "'Calibri','Sylfaen','Noto Sans Georgian','DejaVu Sans',sans-serif", fontSize: "9pt", marginTop: "14pt" }}>
+                                  <span style={{ fontWeight: "bold" }}>თემატიკა და შეფასების მეთოდები</span>
+                                </p>
+                                <table style={{ borderCollapse: "collapse", width: "647.75pt", tableLayout: "fixed", marginBottom: "16pt", fontFamily: "'Calibri','Sylfaen','Noto Sans Georgian','DejaVu Sans',sans-serif" }}>
+                                  <thead>
+                                    <tr style={{ background: "#f8fafc" }}>
+                                      <th style={{ width: "40pt", textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                        <p style={{ fontSize: "9pt", fontWeight: "bold" }}>სწავლის შედეგები №</p>
+                                      </th>
+                                      <th style={{ width: "220pt", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                        <p style={{ fontSize: "9pt", fontWeight: "bold" }}>თემატიკა</p>
+                                      </th>
+                                      <th style={{ width: "130pt", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                        <p style={{ fontSize: "9pt", fontWeight: "bold" }}>სწავლების ფორმა</p>
+                                      </th>
+                                      <th style={{ width: "130pt", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                        <p style={{ fontSize: "9pt", fontWeight: "bold" }}>შეფასების მეთოდები</p>
+                                      </th>
+                                      <th style={{ width: "127pt", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                        <p style={{ fontSize: "9pt", fontWeight: "bold" }}>მტკიცებულებები პროფესიული სტუდენტის პორტფოლიოსთვის</p>
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {outcomes.map((item, idx) => (
+                                      <tr key={idx}>
+                                        <td style={{ textAlign: "center", fontWeight: "bold", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                          <p style={{ fontSize: "9pt" }}>{item.outcome_number || (idx + 1)}</p>
+                                        </td>
+                                        <td style={{ border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                          <p style={{ fontSize: "9pt", whiteSpace: "pre-wrap" }}>{item.topics || '—'}</p>
+                                        </td>
+                                        <td style={{ border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                          <p style={{ fontSize: "9pt" }}>ლექცია, ინტერაქტიული ლექცია, დემონსტრირება, პრაქტიკული მეცადინეობა, სამუშაო ჯგუფში მუშაობა.</p>
+                                        </td>
+                                        <td style={{ border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                          <p style={{ fontSize: "9pt", whiteSpace: "pre-wrap" }}>{item.assessment_methods || 'პრაქტიკული დავალება'}</p>
+                                        </td>
+                                        <td style={{ border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                          <p style={{ fontSize: "9pt" }}>პრაქტიკული დავალება - პროფესიული სტუდენტის მიერ შესრულებული პრაქტიკული დავალება.</p>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </>
+                            )}
+
+                            {/* საათების განაწილება სწავლის შედეგების მიხედვით */}
+                            {(mod.hours_total || mod.hours_contact || outcomes.some(o => o.hours_contact || o.hours_total)) && (
+                              <>
+                                <p style={{ textAlign: "left", paddingBottom: "10pt", marginLeft: "18pt", textIndent: "-9pt", lineHeight: 1.32, fontFamily: "'Calibri','Sylfaen','Noto Sans Georgian','DejaVu Sans',sans-serif", fontSize: "9pt", marginTop: "14pt" }}>
+                                  <span style={{ fontWeight: "bold" }}>საათების განაწილება სწავლის შედეგების მიხედვით</span>
+                                </p>
+                                <table style={{ borderCollapse: "collapse", width: "100%", tableLayout: "auto", marginBottom: "16pt", fontFamily: "'Calibri','Sylfaen','Noto Sans Georgian','DejaVu Sans',sans-serif" }}>
+                                  <thead>
+                                    <tr style={{ background: "#f8fafc" }}>
+                                      <th style={{ width: "250pt", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                        <p style={{ fontSize: "9pt", fontWeight: "bold" }}>სწავლის შედეგები</p>
+                                      </th>
+                                      <th style={{ textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                        <p style={{ fontSize: "9pt", fontWeight: "bold" }}>საკონტაქტო</p>
+                                      </th>
+                                      <th style={{ textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                        <p style={{ fontSize: "9pt", fontWeight: "bold" }}>დამოუკიდებელი</p>
+                                      </th>
+                                      <th style={{ textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                        <p style={{ fontSize: "9pt", fontWeight: "bold" }}>შეფასება</p>
+                                      </th>
+                                      <th style={{ textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                        <p style={{ fontSize: "9pt", fontWeight: "bold" }}>სულ</p>
+                                      </th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {outcomes.map((item, idx) => (
+                                      <tr key={idx}>
+                                        <td style={{ border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}>
+                                          <p style={{ fontSize: "9pt" }}><strong>შედეგი {item.outcome_number || (idx + 1)}:</strong> {item.outcome_name}</p>
+                                        </td>
+                                        <td style={{ textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}><p style={{ fontSize: "9pt" }}>{item.hours_contact || '—'}</p></td>
+                                        <td style={{ textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}><p style={{ fontSize: "9pt" }}>{item.hours_independent || '—'}</p></td>
+                                        <td style={{ textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}><p style={{ fontSize: "9pt" }}>{item.hours_evaluation || '—'}</p></td>
+                                        <td style={{ textAlign: "center", fontWeight: "bold", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}><p style={{ fontSize: "9pt" }}>{item.hours_total || '—'}</p></td>
+                                      </tr>
+                                    ))}
+                                    {mod.hours_total && (
+                                      <tr style={{ background: "#f1f5f9", fontWeight: "bold" }}>
+                                        <td style={{ border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}><p style={{ fontSize: "9pt", fontWeight: "bold" }}>სულ ჯამი</p></td>
+                                        <td style={{ textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}><p style={{ fontSize: "9pt", fontWeight: "bold" }}>{mod.hours_total} სთ</p></td>
+                                        <td style={{ textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}><p style={{ fontSize: "9pt" }}>—</p></td>
+                                        <td style={{ textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}><p style={{ fontSize: "9pt" }}>—</p></td>
+                                        <td style={{ textAlign: "center", border: "0.5pt solid #BFBFBF", padding: "3pt 5.4pt" }}><p style={{ fontSize: "9pt", fontWeight: "bold" }}>{mod.hours_total} სთ</p></td>
+                                      </tr>
+                                    )}
+                                  </tbody>
+                                </table>
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <div className="empty-doc-box">
+                            <p className="empty-doc-text">
+                              დოკუმენტის შიგთავსი ცარიელია ან დამუშავების პროცესშია.
+                            </p>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td>
+                        <div className="ftr">
+                          <p style={{ textAlign: "right", fontSize: "8pt", color: "#888", paddingTop: "10pt" }}>
+                            გვერდი 1
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
             </div>
-          ) : (
-            <div className="empty-doc-box">
-              <p className="empty-doc-text">
-                დოკუმენტის შიგთავსი ცარიელია ან დამუშავების პროცესშია.
-              </p>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </main>
     </div>
   );

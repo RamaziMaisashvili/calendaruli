@@ -427,18 +427,49 @@ def get_file_module(file_id: int, user: dict = Depends(get_current_user)):
             doc_elements = []
             actual_file_path = None
             if ext in [".docx", ".doc"]:
-                possible_paths = [
-                    f_row.get("file_path"),
-                    os.path.join(UPLOAD_DIR, f_row["original_name"]),
-                    os.path.join(UPLOAD_DIR, os.path.basename(f_row.get("file_path", ""))),
-                    os.path.abspath(f_row.get("file_path", "")) if f_row.get("file_path") else None,
-                    os.path.join(BASE_DIR, "uploads", f_row["original_name"]),
-                    os.path.join(BASE_DIR, f_row.get("file_path", "").lstrip("/\\")) if f_row.get("file_path") else None
+                from urllib.parse import unquote
+                orig = f_row.get("original_name", "")
+                unquoted_orig = unquote(orig)
+                raw_path = f_row.get("file_path", "")
+                base_fname = os.path.basename(raw_path.replace("\\", "/")) if raw_path else ""
+
+                search_dirs = [
+                    UPLOAD_DIR,
+                    os.path.join(BASE_DIR, "uploads"),
+                    os.path.join(BASE_DIR, "..", "uploads"),
+                    "/var/www/calendar.learn/backend/uploads",
+                    "/var/www/calendar.learn/uploads",
+                    os.path.dirname(raw_path) if raw_path else None
                 ]
+
+                possible_paths = [
+                    raw_path,
+                    os.path.abspath(raw_path) if raw_path else None,
+                ]
+
+                for d in search_dirs:
+                    if d and os.path.isdir(d):
+                        possible_paths.extend([
+                            os.path.join(d, orig),
+                            os.path.join(d, unquoted_orig),
+                            os.path.join(d, base_fname),
+                        ])
+
                 for p in possible_paths:
                     if p and os.path.isfile(p):
                         actual_file_path = p
                         break
+
+                # თუ პირდაპირი გზით ვერ იპოვა, მოვძებნოთ საქაღალდეებში სახელის შესაბამისობით
+                if not actual_file_path:
+                    for d in search_dirs:
+                        if d and os.path.isdir(d):
+                            for fname in os.listdir(d):
+                                if fname == orig or fname == unquoted_orig or fname.lower() == orig.lower() or fname.lower() == unquoted_orig.lower():
+                                    actual_file_path = os.path.join(d, fname)
+                                    break
+                            if actual_file_path:
+                                break
 
                 if actual_file_path:
                     try:

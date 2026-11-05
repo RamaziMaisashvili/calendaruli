@@ -1,85 +1,86 @@
 import logging
-import pymysql
-from fastapi import FastAPI, Request, HTTPException
+import uvicorn
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
-from fastapi.exceptions import RequestValidationError
-from pydantic import BaseModel, Field
-from starlette.concurrency import run_in_threadpool
-from auth import login_user, validate_session
-from program_import import router as import_router
+from fastapi.responses import JSONResponse
+import pymysql
 
-api = FastAPI(docs_url=None,redoc_url=None,openapi_url=None)
+from database import get_connection, DB_HOST, DB_PORT, DB_NAME, DB_USER
+from routers.auth import router as auth_router
+from routers.files import router as files_router
 
-class LoginBody(BaseModel):
-    username: str = Field(min_length=1,max_length=190)
-    password: str = Field(min_length=1,max_length=1024)
+# აპლიკაციის ინიციალიზაცია (მხოლოდ შესვლის წერტილი)
+app = FastAPI(
+    title="Calendar Learn API",
+    description="სასწავლო რესურსების მართვისა და ფაილების დამუშავების API (api.learn.net.ge)",
+    version="1.0.0"
+)
 
-@api.exception_handler(pymysql.MySQLError)
-async def database_error(request, exc):
-    logging.error("Database failure: %s", type(exc).__name__)
-    return JSONResponse(status_code=503,content={"message":"მომსახურება დროებით მიუწვდომელია"})
+# CORS პარამეტრები
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@api.exception_handler(Exception)
-async def unexpected_error(request, exc):
-    logging.error("Application failure: %s", type(exc).__name__)
-    return JSONResponse(status_code=500,content={"message":"მომსახურება დროებით მიუწვდომელია"})
+# მონაცემთა ბაზის შეცდომების დამმუშავებელი
+@app.exception_handler(pymysql.MySQLError)
+async def mysql_error_handler(request, exc):
+    logging.error(f"MySQL შეცდომა: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "message": "მონაცემთა ბაზასთან დაკავშირება ვერ მოხერხდა",
+            "detail": str(exc),
+            "db_info": f"Host: {DB_HOST}:{DB_PORT}, DB: {DB_NAME}, User: {DB_USER}"
+        }
+    )
 
-@api.exception_handler(HTTPException)
-async def http_error(request, exc):
-    if request.url.path.startswith('/api/program-import/'):
-        return JSONResponse(status_code=exc.status_code,content={"authenticated":True,"ok":False,"message":str(exc.detail)})
-    return JSONResponse(status_code=exc.status_code,content={"message":"მოთხოვნა ვერ შესრულდა"})
+# როუტერების მიერთება
+app.include_router(auth_router)
+app.include_router(files_router)
 
-@api.exception_handler(RequestValidationError)
-async def invalid_input(request, exc):
-    if request.url.path.startswith('/api/program-import/'):
-        return JSONResponse(status_code=422,content={"authenticated":True,"ok":False,"message":"შეამოწმეთ შევსებული ველები: სახელები, საათები, თარიღი და კვირების მონაცემები."})
-    return JSONResponse(status_code=200,content={"authenticated":False,"message":"ვერ გაიარა ავტორიზაცია"})
-
-@api.middleware("http")
-async def protect_routes(request: Request, call_next):
-    # All future business routes are protected by default.
-    public = {"/", "/api/auth/login"}
-    auth_routes = {"/api/auth/me", "/api/auth/activity", "/api/auth/refresh", "/api/auth/logout"}
-    if request.method != "OPTIONS" and request.url.path not in public | auth_routes:
-        user_id, result = await run_in_threadpool(validate_session,request,activity=True,rotate=False)
-        if not user_id:
-            return JSONResponse(result,status_code=200)
-        request.state.user_id = user_id
-        return await call_next(request)
-    return await call_next(request)
-
-@api.get("/")
+@app.get("/")
 def root():
-    return Response(content="",media_type="text/html")
+    return {
+        "status": "online",
+        "service": "Calendar Learn API (api.learn.net.ge)"
+    }
 
-@api.post("/api/auth/login")
-def login(body: LoginBody):
-    return login_user(body.username.strip(),body.password)
+@app.get("/api/health")
+def health_check():
+    checks = {
+        "database": "disconnected",
+        "docx_installed": False,
+        "openpyxl_installed": False
+    }
+    try:
+        conn = get_connection()
+        conn.close()
+        checks["database"] = "connected"
+    except Exception as e:
+        checks["database_error"] = str(e)
 
-@api.api_route("/api/auth/me",methods=["GET","POST"])
-def me(request: Request):
-    _, result = validate_session(request, activity=False)
-    return result
+    try:
+        import docx
+        checks["docx_installed"] = True
+    except ImportError as e:
+        checks["docx_error"] = str(e)
 
-@api.post("/api/auth/activity")
-def activity(request: Request):
-    _, result = validate_session(request, activity=True)
-    return result
+    try:
+        import openpyxl
+        checks["openpyxl_installed"] = True
+    except ImportError as e:
+        checks["openpyxl_error"] = str(e)
 
-@api.post("/api/auth/refresh")
-def refresh(request: Request):
-    _, result = validate_session(request, activity=False)
-    return result
+    is_ok = (checks["database"] == "connected" and checks["docx_installed"])
+    return {
+        "status": "ok" if is_ok else "warning",
+        "checks": checks
+    }
 
-@api.post("/api/auth/logout")
-def logout(request: Request):
-    _, result = validate_session(request, revoke=True)
-    return result
-
-api.include_router(import_router)
-
-# No cookies or domain allow-list. Every protected route must validate its token.
-app = CORSMiddleware(api,allow_origins=["*"],allow_credentials=False,
-    allow_methods=["GET","POST","PUT","DELETE","OPTIONS"],allow_headers=["Authorization","X-Username","Content-Type"])
+if __name__ == "__main__":
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

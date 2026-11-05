@@ -1,0 +1,736 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { 
+  Printer, Download, X, FileText, Maximize2, Minimize2, 
+  ZoomIn, ZoomOut, Layout, BookOpen, Layers, FileSpreadsheet,
+  Package, Calendar, Clock, Search, Award
+} from 'lucide-react';
+import { api } from '../services/api';
+
+export default function DocumentReader({ file, moduleData, onClose }) {
+  const overlayRef = useRef(null);
+  const paperRef = useRef(null);
+
+  // მართვის მდგომარეობები
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isWideView, setIsWideView] = useState(true); // ნაგულისხმევად გაშლილი ხედი, რათა ცხრილები ლამაზად დაეტიოს
+  const [zoomLevel, setZoomLevel] = useState(100);
+  const [resourceSearch, setResourceSearch] = useState('');
+
+  // Body Scroll-ის დაბლოკვა მოდალის გახსნისას
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (document.fullscreenElement) {
+          document.exitFullscreen().catch(() => {});
+        } else {
+          onClose();
+        }
+      }
+    };
+
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    };
+  }, [onClose]);
+
+  // სრულ ეკრანზე გადართვა (Browser Fullscreen)
+  const toggleFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement) {
+        if (overlayRef.current?.requestFullscreen) {
+          await overlayRef.current.requestFullscreen();
+        } else if (document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } else {
+        if (document.exitFullscreen) {
+          await document.exitFullscreen();
+        }
+      }
+    } catch (err) {
+      console.warn('Fullscreen შეცდომა:', err);
+    }
+  };
+
+  const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 10, 150));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 10, 75));
+  const handleZoomReset = () => setZoomLevel(100);
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleDownload = () => {
+    api.downloadFile(file.id, file.original_name).catch((err) => {
+      alert('ჩამოტვირთვა ვერ მოხერხდა: ' + (err.message || err));
+    });
+  };
+
+  const isCurriculumPlan = moduleData?.is_curriculum_plan;
+  const isMaterialResources = moduleData?.is_material_resources;
+  const mod = moduleData?.module;
+  const outcomes = moduleData?.outcomes || [];
+  const hasModule = moduleData?.has_module;
+  const docElements = moduleData?.doc_elements || [];
+
+  // მოდულის ტიპის განსაზღვრა (1=პროფესიული, 2=ზოგადი, 3=ინტეგრირებული -> სიტყვებით გამოტანა)
+  const resolveTypeName = (val) => {
+    if (val === 1 || val === '1' || val === 'პროფესიული') return 'პროფესიული';
+    if (val === 2 || val === '2' || val === 'ზოგადი') return 'ზოგადი';
+    if (val === 3 || val === '3' || val === 'ინტეგრირებული') return 'ინტეგრირებული';
+    return null;
+  };
+
+  const rawType = resolveTypeName(moduleData?.module_type) || resolveTypeName(moduleData?.module?.module_type);
+  const docType = rawType || (
+    file.original_name?.includes('მათემატიკ') ||
+    file.original_name?.includes('მეცნიერ') ||
+    file.original_name?.includes('მოქალაქ') ||
+    file.original_name?.includes('სპორტ') ||
+    JSON.stringify(docElements).includes('ინტეგრირებული')
+      ? 'ინტეგრირებული'
+      : (file.original_name?.includes('(ზოგადი)') || 
+         file.original_name?.includes('ზოგადი') ||
+         JSON.stringify(docElements).includes('სტატუსი - ზოგადი'))
+      ? 'ზოგადი'
+      : 'პროფესიული'
+  );
+
+  const isIntegrated = docType === 'ინტეგრირებული';
+
+  const typeConfig = {
+    'ინტეგრირებული': {
+      title: '★ ინტეგრირებული საგანმანათლებლო მოდული',
+      tagClass: 'integrated-tag',
+      badgeClass: 'integrated'
+    },
+    'ზოგადი': {
+      title: '★ ზოგადი საგანმანათლებლო მოდული',
+      tagClass: 'general-tag',
+      badgeClass: 'general'
+    },
+    'პროფესიული': {
+      title: '★ პროფესიული საგანმანათლებლო მოდული',
+      tagClass: 'vocational-tag',
+      badgeClass: 'vocational'
+    }
+  }[docType];
+
+  // სასწავლო გეგმის სტატისტიკის დათვლა
+  const planStats = useMemo(() => {
+    if (!isCurriculumPlan || !moduleData?.plans) return null;
+    const plans = moduleData.plans;
+    let totalCredits = 0;
+    let totalHours = 0;
+    let contactHours = 0;
+    let indepHours = 0;
+    let evalHours = 0;
+
+    plans.forEach(p => {
+      const cr = parseFloat(p.credits) || 0;
+      totalCredits += cr;
+      totalHours += (p.hours_total || 0);
+      contactHours += (p.hours_contact || 0);
+      indepHours += (p.hours_independent || 0);
+      evalHours += (p.hours_evaluation || 0);
+    });
+
+    return {
+      moduleCount: plans.length,
+      totalCredits,
+      totalHours,
+      contactHours,
+      indepHours,
+      evalHours
+    };
+  }, [isCurriculumPlan, moduleData]);
+
+  // მატერიალური რესურსების სტატისტიკა და ფილტრაცია
+  const resourceStats = useMemo(() => {
+    if (!isMaterialResources || !moduleData?.modules) return null;
+    const mods = moduleData.modules;
+    let totalEquipment = 0;
+    let totalMaterials = 0;
+
+    mods.forEach(m => {
+      totalEquipment += (m.equipment?.length || 0);
+      totalMaterials += (m.materials?.length || 0);
+    });
+
+    return {
+      moduleCount: mods.length,
+      totalEquipment,
+      totalMaterials
+    };
+  }, [isMaterialResources, moduleData]);
+
+  const filteredResourceModules = useMemo(() => {
+    if (!isMaterialResources || !moduleData?.modules) return [];
+    if (!resourceSearch.trim()) return moduleData.modules;
+    const q = resourceSearch.toLowerCase().trim();
+    return moduleData.modules.filter(m => 
+      m.module_name?.toLowerCase().includes(q) ||
+      m.learning_environment?.toLowerCase().includes(q) ||
+      m.equipment?.some(it => it.name?.toLowerCase().includes(q)) ||
+      m.materials?.some(it => it.name?.toLowerCase().includes(q))
+    );
+  }, [isMaterialResources, moduleData, resourceSearch]);
+
+  return (
+    <div className="word-viewer-overlay" ref={overlayRef}>
+      {/* ზედა ხელსაწყოების ზოლი (Toolbar) */}
+      <header className="word-viewer-toolbar no-print">
+        <div className="word-toolbar-left">
+          <div className="word-icon-pill" style={{ background: isCurriculumPlan || isMaterialResources ? 'linear-gradient(135deg, #059669, #10b981)' : undefined }}>
+            {isCurriculumPlan || isMaterialResources ? <FileSpreadsheet size={18} /> : <FileText size={18} />}
+          </div>
+          <div className="word-header-text">
+            <span className="word-doc-title" title={file.original_name}>
+              {file.original_name}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+              {isCurriculumPlan ? (
+                <>
+                  <span className="module-badge-tag integrated-tag">
+                    სასწავლო გეგმა (Excel)
+                  </span>
+                  <span className="word-header-badge">
+                    {moduleData.plans?.length || 0} მოდული
+                  </span>
+                </>
+              ) : isMaterialResources ? (
+                <>
+                  <span className="module-badge-tag general-tag">
+                    მატერიალური რესურსები (Excel)
+                  </span>
+                  <span className="word-header-badge">
+                    {moduleData.modules?.length || 0} მოდული
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className={`module-badge-tag ${typeConfig.tagClass}`}>
+                    {docType} მოდული
+                  </span>
+                  {mod?.credits && (
+                    <span className="word-header-badge">
+                      {mod.credits} კრედიტი
+                    </span>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ცენტრალური მართვის პანელი (View Mode & Zoom) */}
+        <div className="word-toolbar-center">
+          <div className="viewer-btn-group">
+            <button 
+              className={`viewer-toggle-btn ${!isWideView ? 'active' : ''}`}
+              onClick={() => setIsWideView(false)}
+              title="A4 ფურცლის ფორმატი (დაბეჭდვის რეჟიმი)"
+            >
+              A4 ხედი
+            </button>
+            <button 
+              className={`viewer-toggle-btn ${isWideView ? 'active' : ''}`}
+              onClick={() => setIsWideView(true)}
+              title="ეკრანის სრულ სიგანეზე გაშლა ცხრილებისთვის"
+            >
+              <Layout size={13} style={{ marginRight: '4px' }} />
+              გაშლილი ხედი
+            </button>
+          </div>
+
+          <div className="viewer-btn-group zoom-controls">
+            <button 
+              className="viewer-icon-btn" 
+              onClick={handleZoomOut} 
+              disabled={zoomLevel <= 75}
+              title="დაპატარავება"
+            >
+              <ZoomOut size={15} />
+            </button>
+            <span className="zoom-label" onClick={handleZoomReset} title="საწყის ზომაზე დაბრუნება (100%)">
+              {zoomLevel}%
+            </span>
+            <button 
+              className="viewer-icon-btn" 
+              onClick={handleZoomIn} 
+              disabled={zoomLevel >= 150}
+              title="გადიდება"
+            >
+              <ZoomIn size={15} />
+            </button>
+          </div>
+        </div>
+
+        {/* მარჯვენა მოქმედებების ღილაკები */}
+        <div className="word-toolbar-actions">
+          <button 
+            className="word-btn icon-only-btn" 
+            onClick={toggleFullscreen} 
+            title={isFullscreen ? "სრული ეკრანიდან გამოსვლა" : "სრულ ეკრანზე გაშლა"}
+          >
+            {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+          </button>
+
+          <button className="word-btn print-btn" onClick={handlePrint} title="ბეჭდვა / PDF">
+            <Printer size={16} />
+            <span>ბეჭდვა</span>
+          </button>
+
+          <button className="word-btn download-btn" onClick={handleDownload} title="ორიგინალი ფაილის ჩამოტვირთვა">
+            <Download size={16} />
+            <span>ჩამოტვირთვა</span>
+          </button>
+
+          <button className="word-btn close-btn" onClick={onClose} title="დახურვა (Esc)">
+            <X size={18} />
+            <span>დახურვა</span>
+          </button>
+        </div>
+      </header>
+
+      {/* დოკუმენტის სამუშაო სივრცე (გამართული სქროლით) */}
+      <main className="word-viewer-body">
+        <div 
+          className={`word-paper-sheet ${isWideView ? 'wide-mode' : 'a4-mode'}`} 
+          ref={paperRef}
+          style={{
+            zoom: zoomLevel !== 100 ? `${zoomLevel}%` : undefined
+          }}
+        >
+          {/* ==============================================================
+             1. სასწავლო გეგმა (Curriculum Plan Excel)
+             ============================================================== */}
+          {isCurriculumPlan && moduleData?.plans ? (
+            <div className="curriculum-document excel-curriculum-view">
+              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                <span className="doc-type-badge general" style={{ background: '#ecfdf5', color: '#047857', borderColor: '#a7f3d0' }}>
+                  ★ საგანმანათლებლო პროგრამის სასწავლო გეგმა (კურიკულუმი)
+                </span>
+                <h1 className="doc-title" style={{ marginTop: '14px', fontSize: '20px' }}>
+                  {moduleData.title || file.original_name}
+                </h1>
+              </div>
+
+              {/* სტატისტიკური ბარათები */}
+              {planStats && (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                  gap: '12px',
+                  marginBottom: '24px'
+                }}>
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>სულ მოდულები</div>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#1e293b', marginTop: '2px' }}>{planStats.moduleCount}</div>
+                  </div>
+                  <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: '#1e40af', fontWeight: '600' }}>სულ კრედიტები</div>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#1d4ed8', marginTop: '2px' }}>{planStats.totalCredits}</div>
+                  </div>
+                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: '#166534', fontWeight: '600' }}>საკონტაქტო სთ</div>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#15803d', marginTop: '2px' }}>{planStats.contactHours}</div>
+                  </div>
+                  <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: '#92400e', fontWeight: '600' }}>დამოუკიდებელი სთ</div>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#b45309', marginTop: '2px' }}>{planStats.indepHours}</div>
+                  </div>
+                  <div style={{ background: '#fdf2f8', border: '1px solid #fbcfe8', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: '#9d174d', fontWeight: '600' }}>შეფასება სთ</div>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#be185d', marginTop: '2px' }}>{planStats.evalHours}</div>
+                  </div>
+                  <div style={{ background: '#faf5ff', border: '1px solid #e9d5ff', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: '#6b21a8', fontWeight: '600' }}>ჯამური საათები</div>
+                    <div style={{ fontSize: '20px', fontWeight: '700', color: '#7e22ce', marginTop: '2px' }}>{planStats.totalHours} სთ</div>
+                  </div>
+                </div>
+              )}
+
+              {/* სასწავლო გეგმის ცხრილი */}
+              <div className="table-responsive-box">
+                <table className="word-exact-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px', textAlign: 'center' }}>№</th>
+                      <th style={{ minWidth: '220px', textAlign: 'left' }}>მოდულის დასახელება</th>
+                      <th style={{ width: '100px', textAlign: 'center' }}>კოდი</th>
+                      <th style={{ width: '70px', textAlign: 'center' }}>კრედიტი</th>
+                      <th style={{ width: '105px', textAlign: 'center' }}>სტატუსი</th>
+                      <th style={{ width: '65px', textAlign: 'center' }}>სულ</th>
+                      <th style={{ width: '65px', textAlign: 'center' }}>საკონტ.</th>
+                      <th style={{ width: '65px', textAlign: 'center' }}>დამოუკ.</th>
+                      <th style={{ width: '65px', textAlign: 'center' }}>შეფას.</th>
+                      <th style={{ minWidth: '200px', textAlign: 'left' }}>კვირეული განაწილება (საათები)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {moduleData.plans.map((p, idx) => {
+                      const st = resolveTypeName(p.status) || 'ზოგადი';
+                      const stBadge = st === 'პროფესიული' 
+                        ? { bg: '#eff6ff', color: '#1d4ed8', border: '#bfdbfe' }
+                        : st === 'ინტეგრირებული'
+                        ? { bg: '#ecfdf5', color: '#047857', border: '#a7f3d0' }
+                        : { bg: '#fffbeb', color: '#b45309', border: '#fde68a' };
+
+                      return (
+                        <tr key={idx}>
+                          <td style={{ textAlign: 'center', fontWeight: '700' }}>{p.module_order || (idx + 1)}</td>
+                          <td style={{ fontWeight: '600', color: '#0f172a' }}>{p.module_name}</td>
+                          <td style={{ textAlign: 'center', fontSize: '11px', fontFamily: 'monospace' }}>{p.registration_number || '—'}</td>
+                          <td style={{ textAlign: 'center', fontWeight: '700' }}>{p.credits || '—'}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: '600',
+                              background: stBadge.bg,
+                              color: stBadge.color,
+                              border: `1px solid ${stBadge.border}`
+                            }}>
+                              {st}
+                            </span>
+                          </td>
+                          <td style={{ textAlign: 'center', fontWeight: '700' }}>{p.hours_total || 0}</td>
+                          <td style={{ textAlign: 'center' }}>{p.hours_contact || 0}</td>
+                          <td style={{ textAlign: 'center' }}>{p.hours_independent || 0}</td>
+                          <td style={{ textAlign: 'center' }}>{p.hours_evaluation || 0}</td>
+                          <td>
+                            {p.weekly_schedule && p.weekly_schedule.length > 0 ? (
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                                {p.weekly_schedule.slice(0, 15).map((w, wIdx) => (
+                                  <span key={wIdx} style={{
+                                    fontSize: '10.5px',
+                                    padding: '1px 5px',
+                                    background: '#f1f5f9',
+                                    borderRadius: '4px',
+                                    border: '1px solid #cbd5e1',
+                                    whiteSpace: 'nowrap'
+                                  }} title={`კვირა ${w.week}: ${w.hours} სთ`}>
+                                    კვ.{w.week}: <strong>{w.hours}</strong>
+                                  </span>
+                                ))}
+                                {p.weekly_schedule.length > 15 && (
+                                  <span style={{ fontSize: '10.5px', color: '#64748b' }}>
+                                    +{p.weekly_schedule.length - 15} კვირა
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span style={{ color: '#94a3b8', fontSize: '11px' }}>—</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : isMaterialResources && moduleData?.modules ? (
+            /* ==============================================================
+               2. მატერიალური რესურსები (Material Resources Excel)
+               ============================================================== */
+            <div className="curriculum-document excel-resources-view">
+              <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+                <span className="doc-type-badge general" style={{ background: '#fef3c7', color: '#92400e', borderColor: '#fde68a' }}>
+                  ★ საგანმანათლებლო პროგრამის მატერიალური რესურსები
+                </span>
+                <h1 className="doc-title" style={{ marginTop: '14px', fontSize: '20px' }}>
+                  {moduleData.title || file.original_name}
+                </h1>
+              </div>
+
+              {/* რესურსების სტატისტიკა */}
+              {resourceStats && (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                  gap: '12px',
+                  marginBottom: '20px'
+                }}>
+                  <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: '#64748b', fontWeight: '600' }}>მოდულების რაოდენობა</div>
+                    <div style={{ fontSize: '22px', fontWeight: '700', color: '#1e293b', marginTop: '2px' }}>{resourceStats.moduleCount}</div>
+                  </div>
+                  <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: '#1e40af', fontWeight: '600' }}>ინვენტარი და აღჭურვილობა</div>
+                    <div style={{ fontSize: '22px', fontWeight: '700', color: '#1d4ed8', marginTop: '2px' }}>{resourceStats.totalEquipment} ერთეული</div>
+                  </div>
+                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', color: '#166534', fontWeight: '600' }}>მასალა და ნედლეული</div>
+                    <div style={{ fontSize: '22px', fontWeight: '700', color: '#15803d', marginTop: '2px' }}>{resourceStats.totalMaterials} ერთეული</div>
+                  </div>
+                </div>
+              )}
+
+              {/* ძებნის ველი მატერიალურ რესურსებში */}
+              <div style={{ marginBottom: '20px' }} className="no-print">
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  borderRadius: '6px',
+                  padding: '6px 12px',
+                  maxWidth: '400px'
+                }}>
+                  <Search size={16} style={{ color: '#64748b', marginRight: '8px' }} />
+                  <input
+                    type="text"
+                    value={resourceSearch}
+                    onChange={(e) => setResourceSearch(e.target.value)}
+                    placeholder="რესურსის ან მოდულის ძებნა..."
+                    style={{
+                      border: 'none',
+                      outline: 'none',
+                      background: 'transparent',
+                      width: '100%',
+                      fontSize: '13px'
+                    }}
+                  />
+                  {resourceSearch && (
+                    <button 
+                      onClick={() => setResourceSearch('')}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* მოდულების მიხედვით დაჯგუფებული რესურსები */}
+              {filteredResourceModules.map((m, mIdx) => (
+                <div key={mIdx} style={{
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  marginBottom: '24px',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px', marginBottom: '14px' }}>
+                    <div>
+                      <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#0f172a', margin: 0 }}>
+                        {mIdx + 1}. {m.module_name}
+                      </h3>
+                      {m.learning_environment && (
+                        <div style={{ marginTop: '4px' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            background: '#f1f5f9',
+                            color: '#475569',
+                            fontSize: '11px',
+                            fontWeight: '600',
+                            padding: '2px 8px',
+                            borderRadius: '4px'
+                          }}>
+                            სასწავლო გარემო: {m.learning_environment}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b' }}>
+                      {(m.equipment?.length || 0) + (m.materials?.length || 0)} რესურსი
+                    </div>
+                  </div>
+
+                  {/* ინვენტარი / აღჭურვილობა */}
+                  {m.equipment && m.equipment.length > 0 && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <div style={{ fontSize: '13px', fontWeight: '700', color: '#1e40af', marginBottom: '6px' }}>
+                        📦 ინვენტარი და აღჭურვილობა ({m.equipment.length})
+                      </div>
+                      <table className="word-exact-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '40px', textAlign: 'center' }}>№</th>
+                            <th>დასახელება</th>
+                            <th style={{ width: '90px', textAlign: 'center' }}>რაოდენობა</th>
+                            <th style={{ width: '90px', textAlign: 'center' }}>ერთეული</th>
+                            <th style={{ width: '150px' }}>შენიშვნა</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {m.equipment.map((it, iIdx) => (
+                            <tr key={iIdx}>
+                              <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{it.number || (iIdx + 1)}</td>
+                              <td>{it.name}</td>
+                              <td style={{ textAlign: 'center', fontWeight: '600' }}>{it.quantity || '—'}</td>
+                              <td style={{ textAlign: 'center' }}>{it.unit || '—'}</td>
+                              <td style={{ color: '#64748b', fontSize: '11px' }}>{it.note || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {/* მასალა / ნედლეული */}
+                  {m.materials && m.materials.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: '13px', fontWeight: '700', color: '#15803d', marginBottom: '6px' }}>
+                        🧪 მასალა და ნედლეული ({m.materials.length})
+                      </div>
+                      <table className="word-exact-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '40px', textAlign: 'center' }}>№</th>
+                            <th>დასახელება</th>
+                            <th style={{ width: '90px', textAlign: 'center' }}>რაოდენობა</th>
+                            <th style={{ width: '90px', textAlign: 'center' }}>ერთეული</th>
+                            <th style={{ width: '150px' }}>შენიშვნა</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {m.materials.map((it, iIdx) => (
+                            <tr key={iIdx}>
+                              <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{it.number || (iIdx + 1)}</td>
+                              <td>{it.name}</td>
+                              <td style={{ textAlign: 'center', fontWeight: '600' }}>{it.quantity || '—'}</td>
+                              <td style={{ textAlign: 'center' }}>{it.unit || '—'}</td>
+                              <td style={{ color: '#64748b', fontSize: '11px' }}>{it.note || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : docElements && docElements.length > 0 ? (
+            /* ==============================================================
+               3. 1:1 ვორდის ზუსტი ასლი (ყველა სათაურით, აბზაცით და ცხრილით)
+               ============================================================== */
+            <div className="curriculum-document word-exact-layout">
+              {/* მოდულის ტიპის საინფორმაციო ბეიჯი */}
+              <div style={{ textAlign: 'center', marginBottom: '20px' }} className="no-print">
+                <span className={`doc-type-badge ${typeConfig.badgeClass}`}>
+                  {typeConfig.title}
+                </span>
+              </div>
+
+              {docElements.map((el, elIdx) => {
+                if (el.type === 'p') {
+                  const isTitle = el.is_bold && (el.align === 'center' || el.text.startsWith('მოდული:'));
+                  const isSchoolHeader = el.text.includes('სსიპ') || el.text.includes('სკოლა');
+                  
+                  return (
+                    <p
+                      key={elIdx}
+                      style={{
+                        textAlign: el.align || 'left',
+                        fontWeight: el.is_bold ? '700' : '400',
+                        fontSize: isTitle ? '17px' : (isSchoolHeader ? '15px' : '13.5px'),
+                        marginTop: isTitle ? '14px' : '4px',
+                        marginBottom: isTitle ? '12px' : '8px',
+                        lineHeight: '1.6',
+                        color: isTitle ? '#0f172a' : '#1e293b'
+                      }}
+                    >
+                      {el.text}
+                    </p>
+                  );
+                }
+
+                if (el.type === 'table') {
+                  return (
+                    <div key={elIdx} className="table-responsive-box">
+                      <table className="word-exact-table">
+                        <tbody>
+                          {el.rows.map((row, rIdx) => {
+                            const isHeaderRow = rIdx === 0;
+                            return (
+                              <tr key={rIdx}>
+                                {row.map((cell, cIdx) => (
+                                  <td
+                                    key={cIdx}
+                                    colSpan={cell.col_span || 1}
+                                    className={isHeaderRow ? 'table-header-cell' : 'table-data-cell'}
+                                  >
+                                    {cell.text}
+                                  </td>
+                                ))}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                }
+                return null;
+              })}
+            </div>
+          ) : hasModule && mod ? (
+            /* 4. სარეზერვო ხედი ბაზიდან */
+            <div className="curriculum-document">
+              <div className="doc-main-header">
+                <div className={`doc-type-badge ${isIntegrated ? 'integrated' : 'vocational'}`}>
+                  {isIntegrated ? 'ინტეგრირებული მოდული' : 'პროფესიული მოდული'}
+                </div>
+                <h1 className="doc-title">{mod.module_name}</h1>
+                {mod.registration_number && (
+                  <div className="doc-meta-bar">
+                    <span><strong>რეგისტრაციის №:</strong> {mod.registration_number}</span>
+                    {mod.version_date && <span> • <strong>ვერსია:</strong> {mod.version_date}</span>}
+                    {mod.credits && <span> • <strong>კრედიტი:</strong> {mod.credits}</span>}
+                    {mod.hours_total && <span> • <strong>საათები:</strong> {mod.hours_total} სთ</span>}
+                  </div>
+                )}
+              </div>
+
+              {/* სტანდარტული ცხრილი */}
+              <table className="word-exact-table" style={{ marginTop: '20px' }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: '8%', textAlign: 'center' }}>№</th>
+                    <th style={{ width: '32%' }}>სწავლის შედეგები</th>
+                    <th style={{ width: '40%' }}>შესრულების კრიტერიუმები</th>
+                    <th style={{ width: '20%' }}>შეფასების მიმართულება</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {outcomes.map((item, idx) => (
+                    <tr key={idx}>
+                      <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{item.outcome_number}</td>
+                      <td><strong>{item.outcome_name}</strong></td>
+                      <td style={{ whiteSpace: 'pre-wrap' }}>{item.criteria}</td>
+                      <td>{item.assessment_direction || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="empty-doc-box">
+              <p className="empty-doc-text">
+                დოკუმენტის შიგთავსი ცარიელია ან დამუშავების პროცესშია.
+              </p>
+            </div>
+          )}
+        </div>
+      </main>
+    </div>
+  );
+}

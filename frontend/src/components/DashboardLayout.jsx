@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, UploadCloud, LogOut, BookOpen, FolderOpen, Users } from 'lucide-react';
+import { LayoutDashboard, UploadCloud, LogOut, BookOpen, FolderOpen, Users, GraduationCap } from 'lucide-react';
 
 export default function DashboardLayout({ children, activeTab, setActiveTab }) {
   const { user, logout } = useAuth();
@@ -25,6 +25,7 @@ export default function DashboardLayout({ children, activeTab, setActiveTab }) {
   const getPageTitle = () => {
     if (activeTab === 'dashboard') return 'დაშბორდი';
     if (activeTab === 'teachers') return 'მასწავლებლების მართვა';
+    if (activeTab === 'students') return 'სტუდენტების მართვა';
     if (activeTab === 'resources') {
       if (isAdmin) return 'ფაილების ატვირთვა და მართვა';
       if (isTeacher) return 'ჩემი სასწავლო რესურსები';
@@ -65,7 +66,16 @@ export default function DashboardLayout({ children, activeTab, setActiveTab }) {
             <span>მასწავლებლები</span>
           </button>
 
-          {/* 3. რესურსები / ატვირთვა */}
+          {/* 3. სტუდენტები */}
+          <button
+            className={`nav-item ${activeTab === 'students' ? 'active' : ''}`}
+            onClick={() => setActiveTab('students')}
+          >
+            <GraduationCap size={18} />
+            <span>სტუდენტები</span>
+          </button>
+
+          {/* 4. რესურსები / ატვირთვა */}
           {isAdmin ? (
             <button
               className={`nav-item ${activeTab === 'resources' ? 'active' : ''}`}

@@ -215,5 +215,39 @@ export const api = {
       method: 'DELETE',
     });
   },
+
+  // სტუდენტების CRUD
+  getStudents: async (search = '') => {
+    const query = search ? `?q=${encodeURIComponent(search)}` : '';
+    return request(`/api/students${query}`, {
+      method: 'GET',
+    });
+  },
+
+  getStudent: async (id) => {
+    return request(`/api/students/${id}`, {
+      method: 'GET',
+    });
+  },
+
+  createStudent: async (data) => {
+    return request('/api/students', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateStudent: async (id, data) => {
+    return request(`/api/students/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteStudent: async (id) => {
+    return request(`/api/students/${id}`, {
+      method: 'DELETE',
+    });
+  },
 };
 

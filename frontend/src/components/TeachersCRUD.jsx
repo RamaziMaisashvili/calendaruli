@@ -432,7 +432,7 @@ export default function TeachersCRUD() {
                     </td>                    
                     <td>
                       <span className="username-badge">
-                        @{t.username}
+                        {t.username}
                       </span>
                     </td>
                     <td>

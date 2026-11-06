@@ -186,6 +186,64 @@ function getAcademicWeekForIsoDate(targetDateIso, academicYearStartIso = '2026-0
   return 1;
 }
 
+// სასწავლო კვირის ნომრის მიხედვით მოდულის საწყისი თარიღის ავტომატური გამოთვლა
+function getStartDateForAcademicWeek(targetWeekNum, academicYearStartIso = '2026-09-15', holidaysList = [], selectedDays = [1, 3, 5]) {
+  const targetWeek = Math.max(1, Math.round(Number(targetWeekNum) || 1));
+  const { weekMap, startMonday } = computeAcademicWeeksMap(academicYearStartIso, holidaysList, 120);
+
+  let matchedMonday = null;
+  for (const [monIso, wNum] of weekMap.entries()) {
+    if (wNum === targetWeek) {
+      matchedMonday = monIso;
+      break;
+    }
+  }
+  if (!matchedMonday) {
+    matchedMonday = addDays(startMonday, (targetWeek - 1) * 7);
+  }
+
+  const holidayDateSet = new Set(holidaysList.map((h) => h.date));
+  const activeDays = [...(selectedDays && selectedDays.length > 0 ? selectedDays : [1, 3, 5])].sort((a, b) => a - b);
+
+  // ვიპოვოთ პირველი სასწავლო დღე, რომელიც >= academicYearStartIso და არ არის დასვენება
+  for (const dayOfWeek of activeDays) {
+    const candidateDate = addDays(matchedMonday, dayOfWeek - 1);
+    if (candidateDate >= academicYearStartIso && !holidayDateSet.has(candidateDate)) {
+      return candidateDate;
+    }
+  }
+
+  if (targetWeek === 1) {
+    return academicYearStartIso;
+  }
+
+  return addDays(matchedMonday, (activeDays[0] || 1) - 1);
+}
+
+// სასწავლო კვირის პერიოდის ტექსტი (მაგ. 15.09 – 19.09.26)
+function getWeekPeriodString(targetWeekNum, academicYearStartIso = '2026-09-15', holidaysList = []) {
+  const targetWeek = Math.max(1, Math.round(Number(targetWeekNum) || 1));
+  const { weekMap, startMonday } = computeAcademicWeeksMap(academicYearStartIso, holidaysList, 120);
+
+  let matchedMonday = null;
+  for (const [monIso, wNum] of weekMap.entries()) {
+    if (wNum === targetWeek) {
+      matchedMonday = monIso;
+      break;
+    }
+  }
+  if (!matchedMonday) {
+    matchedMonday = addDays(startMonday, (targetWeek - 1) * 7);
+  }
+  const fridayIso = addDays(matchedMonday, 4);
+  const fD = (iso) => {
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    return `${d}.${m}.${y.slice(-2)}`;
+  };
+  return `${fD(matchedMonday)} – ${fD(fridayIso)}`;
+}
+
 function splitTopicsText(rawText) {
   if (!rawText) return [];
   return rawText
@@ -468,9 +526,16 @@ export default function CalendarGenerator() {
       if (ws.length > 0) {
         const firstWeekNum = Number(ws[0].week || 1);
         setStartAcademicWeek(firstWeekNum);
+        const autoStartDate = getStartDateForAcademicWeek(firstWeekNum, academicYearStartDate, holidays, selectedDays);
+        setStartDate(autoStartDate);
+
         const firstWeekHours = Number(ws[0].hours || 4);
         if (firstWeekHours > 0) {
-          setDailyHourLimit(firstWeekHours);
+          // თუ კვირის დატვირთვაა (> 8 სთ, მაგ. 15 ან 20 სთ), გავყოთ კვირის დღეებზე, რომ დღიური ლიმიტი სწორად დაჯდეს
+          const calcDaily = firstWeekHours > 8
+            ? Math.max(1, Math.round(firstWeekHours / (selectedDays.length || 3)))
+            : firstWeekHours;
+          setDailyHourLimit(calcDaily);
         }
       }
 
@@ -516,19 +581,40 @@ export default function CalendarGenerator() {
       });
       const envFromDb = matchedRes?.learning_environment || extractedMeta.envResources || '';
 
+      const planContactTotal = Number(p.hours_contact || 0);
+      const planEvalTotal = Number(p.hours_evaluation || 0);
+
       if (loadedOutcomes.length > 0) {
+        const sumWordContact = loadedOutcomes.reduce((acc, oc) => acc + Number(oc.hours_contact || 0), 0);
+        const sumWordEval = loadedOutcomes.reduce((acc, oc) => acc + Number(oc.hours_evaluation || 0), 0);
+
         const mappedOutcomes = loadedOutcomes.map((oc, idx) => {
           const parsedTopics = splitTopicsText(oc.topics);
-          const rawContact = Number(oc.hours_contact || 0);
-          const rawEval = Number(oc.hours_evaluation || 0);
+          let rawContact = Number(oc.hours_contact || 0);
+          let rawEval = Number(oc.hours_evaluation || 0);
+
+          // თუ Word-ის ფაილში სწავლის შედეგებზე საათები არ იყო გაწერილი (0 იყო),
+          // სასწავლო გეგმის (Excel) მთლიანი საკონტაქტო საათები გავანაწილოთ შედეგებზე:
+          if (sumWordContact === 0 && planContactTotal > 0) {
+            const basePerOc = Math.floor(planContactTotal / loadedOutcomes.length);
+            const rem = planContactTotal % loadedOutcomes.length;
+            rawContact = basePerOc + (idx < rem ? 1 : 0);
+          }
+          if (sumWordEval === 0 && planEvalTotal > 0) {
+            const baseEval = Math.floor(planEvalTotal / loadedOutcomes.length);
+            const remE = planEvalTotal % loadedOutcomes.length;
+            rawEval = baseEval + (idx < remE ? 1 : 0);
+          }
 
           return {
             id: oc.id || idx + 1,
             outcome_number: oc.outcome_number || String(idx + 1),
-            outcome_name: oc.outcome_name || '',
+            outcome_name: oc.outcome_name || `სწავლის შედეგი ${idx + 1}`,
+            raw_hours_contact: rawContact,
             hours_contact: rawContact,
+            hours_independent: Number(oc.hours_independent || 0),
             hours_evaluation: rawEval,
-            topicsList: parsedTopics.length > 0 ? parsedTopics : [oc.topics || oc.outcome_name || `თემა ${idx + 1}`],
+            topicsList: parsedTopics.length > 0 ? parsedTopics : (oc.topics ? [oc.topics] : [oc.outcome_name || `თემა ${idx + 1}`]),
             criteria: oc.criteria || '',
             teaching_methods: extractedMeta.teachingMethods || 'ლექცია დემონსტრირებით;\nპრაქტიკული სამუშაო;\nდისკუსია/დებატები;\nჯგუფური მუშაობა.',
             environment_resources: envFromDb,
@@ -553,6 +639,7 @@ export default function CalendarGenerator() {
             id: 1,
             outcome_number: '1',
             outcome_name: mTitle || 'სწავლის შედეგი 1',
+            raw_hours_contact: Number(p.hours_contact || 20),
             hours_contact: Number(p.hours_contact || 20),
             hours_evaluation: Number(p.hours_evaluation || 0),
             topicsList: [mTitle || 'მოდულის თემატიკა'],
@@ -694,6 +781,7 @@ export default function CalendarGenerator() {
           outcome_number: oc.outcome_number || String(idx + 1),
           outcome_name: oc.outcome_name || `სწავლის შედეგი ${idx + 1}`,
           raw_hours_contact: rawContact,
+          hours_contact: rawContact,
           hours_independent: Number(oc.hours_independent || 0),
           hours_evaluation: rawEval,
           topicsList: parsedTopics.length > 0 ? parsedTopics : [oc.topics || oc.outcome_name || `თემა ${idx + 1}`],
@@ -734,15 +822,31 @@ export default function CalendarGenerator() {
     if (p.status) setModuleStatus(p.status);
     const ws = p.weekly_schedule_parsed || [];
     if (ws.length > 0) {
-      if (ws[0].week) setStartAcademicWeek(Number(ws[0].week));
-      if (ws[0].hours) setDailyHourLimit(Number(ws[0].hours));
+      if (ws[0].week) {
+        const w = Number(ws[0].week);
+        setStartAcademicWeek(w);
+        const autoDate = getStartDateForAcademicWeek(w, academicYearStartDate, holidays, selectedDays);
+        setStartDate(autoDate);
+      }
+      if (ws[0].hours) {
+        const h = Number(ws[0].hours);
+        const calcDaily = h > 8 ? Math.max(1, Math.round(h / (selectedDays.length || 3))) : h;
+        setDailyHourLimit(calcDaily);
+      }
     }
+  };
+
+  const handleStartAcademicWeekChange = (newWeekNum) => {
+    const w = Math.max(1, Math.round(Number(newWeekNum) || 1));
+    setStartAcademicWeek(w);
+    const autoDate = getStartDateForAcademicWeek(w, academicYearStartDate, holidays, selectedDays);
+    setStartDate(autoDate);
   };
 
   const handleAcademicYearStartChange = (val) => {
     setAcademicYearStartDate(val);
-    const calcWeek = getAcademicWeekForIsoDate(startDate, val, holidays);
-    setStartAcademicWeek(calcWeek);
+    const autoDate = getStartDateForAcademicWeek(startAcademicWeek, val, holidays, selectedDays);
+    setStartDate(autoDate);
   };
 
   const handleStartDateChange = (val) => {
@@ -753,16 +857,21 @@ export default function CalendarGenerator() {
 
   const toggleWeekday = (dayId) => {
     setSelectedDays((prev) => {
+      let nextDays;
       if (prev.includes(dayId)) {
         if (prev.length === 1) return prev;
-        return prev.filter((d) => d !== dayId).sort((a, b) => a - b);
+        nextDays = prev.filter((d) => d !== dayId).sort((a, b) => a - b);
+      } else {
+        nextDays = [...prev, dayId].sort((a, b) => a - b);
       }
-      return [...prev, dayId].sort((a, b) => a - b);
+      const autoDate = getStartDateForAcademicWeek(startAcademicWeek, academicYearStartDate, holidays, nextDays);
+      setStartDate(autoDate);
+      return nextDays;
     });
   };
 
   const getEffectiveContactHours = (oc) => {
-    const base = Math.round(Number(oc.raw_hours_contact || 0));
+    const base = Math.round(Number(oc.raw_hours_contact ?? oc.hours_contact ?? 0));
     const evalH = Math.round(Number(oc.hours_evaluation || 0));
     if (deductEvalFromContact) {
       return Math.max(0, base - evalH);
@@ -1902,38 +2011,42 @@ export default function CalendarGenerator() {
                   სასწავლო კვირების ათვლა იწყება 15.09.2026-დან (ან თქვენ მიერ მითითებული თარიღიდან). თუ მთელი კვირა (ორშ-პარ) დასვენებაა (მაგ. ზამთრის არდადეგები), ის <strong>არ ითვლება</strong> სასწავლო კვირად. ყველა საათი ნაწილდება მხოლოდ <strong>მთელი რიცხვებით</strong>.
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>სასწავლო წლის დაწყება:</label>
-                  <input
-                    type="date"
-                    value={academicYearStartDate}
-                    onChange={(e) => handleAcademicYearStartChange(e.target.value)}
-                    style={{ padding: '8px 12px', borderRadius: '8px', border: '2px solid #2563eb', fontWeight: 700, fontSize: '14px' }}
-                  />
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>
+                    1. სასწავლო კვირა №:
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input
+                      type="number"
+                      min="1"
+                      max="150"
+                      value={startAcademicWeek}
+                      onChange={(e) => handleStartAcademicWeekChange(e.target.value)}
+                      style={{ width: '85px', padding: '8px 12px', borderRadius: '8px', border: '2px solid #2563eb', fontWeight: 700, fontSize: '14px' }}
+                    />
+                    <span style={{ fontSize: '11.5px', background: '#dbeafe', color: '#1e40af', padding: '4px 8px', borderRadius: '6px', fontWeight: 600 }}>
+                      📅 {getWeekPeriodString(startAcademicWeek, academicYearStartDate, holidays)}
+                    </span>
+                  </div>
                 </div>
+
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>მოდულის დაწყების თარიღი:</label>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>
+                    2. მოდულის დაწყების თარიღი (კვირიდან ავტომატური):
+                  </label>
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => handleStartDateChange(e.target.value)}
-                    style={{ padding: '8px 12px', borderRadius: '8px', border: '2px solid #2563eb', fontWeight: 700, fontSize: '14px' }}
+                    style={{ padding: '8px 12px', borderRadius: '8px', border: '2px solid #2563eb', fontWeight: 700, fontSize: '14px', background: '#f0fdf4' }}
                   />
                 </div>
+
                 <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>საწყისი სასწავლო კვირა №:</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="150"
-                    value={startAcademicWeek}
-                    onChange={(e) => setStartAcademicWeek(Math.max(1, Math.round(Number(e.target.value) || 1)))}
-                    style={{ width: '85px', padding: '8px 12px', borderRadius: '8px', border: '2px solid #2563eb', fontWeight: 700, fontSize: '14px' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>დღიური საათების ლიმიტი:</label>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>
+                    დღიური საათები (დღეში ჩასატარებელი სთ):
+                  </label>
                   <input
                     type="number"
                     min="1"
@@ -1942,6 +2055,18 @@ export default function CalendarGenerator() {
                     value={dailyHourLimit}
                     onChange={(e) => setDailyHourLimit(Math.max(1, Math.round(Number(e.target.value) || 1)))}
                     style={{ width: '80px', padding: '8px 12px', borderRadius: '8px', border: '2px solid #2563eb', fontWeight: 700, fontSize: '14px' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>
+                    სასწავლო წლის დაწყება:
+                  </label>
+                  <input
+                    type="date"
+                    value={academicYearStartDate}
+                    onChange={(e) => handleAcademicYearStartChange(e.target.value)}
+                    style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
                   />
                 </div>
               </div>
@@ -2084,10 +2209,10 @@ export default function CalendarGenerator() {
                       <td style={{ padding: '10px', textAlign: 'center' }}>
                         <input
                           type="number"
-                          value={oc.raw_hours_contact}
+                          value={oc.raw_hours_contact ?? oc.hours_contact ?? ''}
                           onChange={(e) => {
                             const val = Number(e.target.value);
-                            setOutcomesConfig((prev) => prev.map((item, i) => (i === idx ? { ...item, raw_hours_contact: val } : item)));
+                            setOutcomesConfig((prev) => prev.map((item, i) => (i === idx ? { ...item, raw_hours_contact: val, hours_contact: val } : item)));
                           }}
                           style={{ width: '70px', padding: '6px', textAlign: 'center', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                         />

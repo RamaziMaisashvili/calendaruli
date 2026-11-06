@@ -231,6 +231,7 @@ export default function CalendarGenerator() {
 
   // ბაზიდან წამოღებული რეალური ფაილები, გეგმები, რესურსები და მასწავლებლები
   const [wordModuleFiles, setWordModuleFiles] = useState([]);
+  const [planFilesList, setPlanFilesList] = useState([]);
   const [dbPlans, setDbPlans] = useState([]);
   const [dbResources, setDbResources] = useState([]);
   const [dbTeachers, setDbTeachers] = useState([]);
@@ -240,8 +241,9 @@ export default function CalendarGenerator() {
   const [step, setStep] = useState(1);
 
   // ნაბიჯი 1: ბაზიდან ამოღებული რეალური მონაცემები
-  const [selectedFileId, setSelectedFileId] = useState('');
+  const [selectedPlanFileId, setSelectedPlanFileId] = useState('');
   const [selectedPlanKey, setSelectedPlanKey] = useState('');
+  const [selectedFileId, setSelectedFileId] = useState('');
   const [organizationName, setOrganizationName] = useState('');
   const [organizationCode, setOrganizationCode] = useState('');
   const [programName, setProgramName] = useState('');
@@ -307,8 +309,21 @@ export default function CalendarGenerator() {
         .catch(() => {});
 
       const allFiles = filesRes.files || [];
-      const teachersList = teachersRes.teachers || teachersRes.users || [];
+      // მასწავლებლები (გამოვრიცხოთ სახელი 'ადმინისტრატორი' და დეფაულტად 'რამაზი მაისაშვილი')
+      const rawTeachers = teachersRes.teachers || teachersRes.users || [];
+      const teachersList = rawTeachers.filter((t) => {
+        const n = (t.name || t.username || '').toLowerCase();
+        return !n.includes('ადმინისტრატორ');
+      });
       setDbTeachers(teachersList);
+
+      const ramazi = teachersList.find(
+        (t) => (t.name || '').includes('რამაზი') || (t.name || '').includes('მაისაშვილი')
+      );
+      const defaultTeacherName = ramazi
+        ? (ramazi.name || ramazi.username)
+        : (teachersList[0]?.name || 'რამაზი მაისაშვილი');
+      setTeacherName(defaultTeacherName);
 
       // 1. გამოვყოთ Word-ის მოდულის ფაილები
       const wordFiles = allFiles.filter((f) => {
@@ -317,8 +332,13 @@ export default function CalendarGenerator() {
       });
       setWordModuleFiles(wordFiles);
 
-      // 2. გამოვყოთ Excel-ის სასწავლო გეგმები (plan) და მატერიალური რესურსები (resources)
-      const planFiles = allFiles.filter((f) => f.resource_category === 'plan');
+      // 2. გამოვყოთ მხოლოდ Excel-ის სასწავლო გეგმები (plan)
+      const planFiles = allFiles.filter((f) => {
+        const ext = (f.original_name || '').split('.').pop().toLowerCase();
+        const isXls = ['xlsx', 'xls', 'csv'].includes(ext);
+        return isXls && (f.resource_category === 'plan' || f.file_type === 'curriculum_plan' || (f.original_name || '').toLowerCase().includes('გეგმ'));
+      });
+      setPlanFilesList(planFiles);
       const resourceFiles = allFiles.filter((f) => f.resource_category === 'resources');
 
       const [loadedPlansArr, loadedResourcesArr] = await Promise.all([
@@ -368,14 +388,186 @@ export default function CalendarGenerator() {
       setDbPlans(flatPlans);
       setDbResources(flatResources);
 
-      // თუ ბაზაში არის ატვირთული Word მოდული, ავირჩიოთ პირველი რეალური მოდული ბაზიდან
-      if (wordFiles.length > 0) {
+      // პირველი სასწავლო გეგმისა და მისი პირველი მოდულის არჩევა
+      if (planFiles.length > 0) {
+        const firstPf = planFiles[0];
+        setSelectedPlanFileId(String(firstPf.id));
+        const firstPlanModules = flatPlans.filter((p) => String(p.file_id) === String(firstPf.id));
+        if (firstPlanModules.length > 0) {
+          await handleSelectPlanModule(firstPlanModules[0]._key, flatPlans, wordFiles, flatResources, defaultTeacherName);
+        }
+      } else if (wordFiles.length > 0) {
         await handleSelectWordFile(String(wordFiles[0].id), wordFiles, flatPlans, flatResources, teachersList);
       }
     } catch (err) {
       setError(err.message || 'ბაზიდან მონაცემების ჩატვირთვა ვერ მოხერხდა');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // როდესაც მომხმარებელი ირჩევს სასწავლო გეგმას (Excel ფაილს)
+  const handleSelectPlanFile = async (planFileIdStr) => {
+    setSelectedPlanFileId(planFileIdStr);
+    const modulesInPlan = dbPlans.filter((p) => String(p.file_id) === String(planFileIdStr));
+    if (modulesInPlan.length > 0) {
+      await handleSelectPlanModule(modulesInPlan[0]._key, dbPlans, wordModuleFiles, dbResources);
+    } else {
+      setSelectedPlanKey('');
+      setModuleTitle('');
+      setRegistrationNumber('');
+      setCredits('');
+      setOutcomesConfig([]);
+    }
+  };
+
+  // როდესაც მომხმარებელი ირჩევს კონკრეტულ მოდულს ამ სასწავლო გეგმიდან
+  const handleSelectPlanModule = async (
+    planKey,
+    plansList = dbPlans,
+    wordFilesList = wordModuleFiles,
+    resourcesList = dbResources,
+    curTeacherName = teacherName
+  ) => {
+    setSelectedPlanKey(planKey);
+    const p = plansList.find((item) => item._key === planKey);
+    if (!p) return;
+
+    setModuleLoading(true);
+    setError('');
+
+    try {
+      const orgName = p.organization_name || organizationName || 'საგანმანათლებლო დაწესებულება';
+      const orgCode = p.organization_code || organizationCode || '';
+      setOrganizationName(orgName);
+      setOrganizationCode(orgCode);
+
+      const mTitle = p.module_name || '';
+      const regNum = (p.registration_number || '').trim();
+      const mType = p.status || 'პროფესიული';
+      const mCredits = p.credits || '';
+
+      setModuleTitle(mTitle);
+      setRegistrationNumber(regNum);
+      setModuleStatus(mType);
+      setCredits(mCredits);
+
+      if (orgCode === '22_skola') {
+        setProgramName('კომპიუტერული ქსელი და სისტემები');
+        setLocation('ქ. ქუთაისი, განათლების ქუჩა 64');
+      } else if (orgCode === 'wea') {
+        setProgramName('Front-end დეველოპმენტი');
+        setLocation(orgName);
+      } else {
+        setProgramName(p.file_name?.replace(/\.[^/.]+$/, '') || '');
+        setLocation(orgName);
+      }
+
+      // კვირეული დატვირთვა გეგმიდან
+      const ws = p.weekly_schedule_parsed || [];
+      if (ws.length > 0) {
+        const firstWeekNum = Number(ws[0].week || 1);
+        setStartAcademicWeek(firstWeekNum);
+        const firstWeekHours = Number(ws[0].hours || 4);
+        if (firstWeekHours > 0) {
+          setDailyHourLimit(firstWeekHours);
+        }
+      }
+
+      const planEval = Number(p.hours_evaluation || 0);
+      if (planEval === 0) {
+        setDeductEvalFromContact(true);
+      } else {
+        setDeductEvalFromContact(false);
+      }
+
+      // მოვძებნოთ შესაბამისი Word მოდულის აღწერა ბაზიდან სწავლის შედეგების წამოსაღებად
+      const normStr = (s) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const targetName = normStr(mTitle);
+      const targetReg = normStr(regNum);
+
+      const matchedWord = wordFilesList.find((wf) => {
+        const wName = normStr(wf.original_name);
+        if (targetReg && targetReg.length > 3 && wName.includes(targetReg)) return true;
+        if (targetName && targetName.length > 3 && (wName.includes(targetName) || targetName.includes(wName))) return true;
+        const words = targetName.split(' ').filter((w) => w.length > 4);
+        if (words.length > 0 && words.filter((w) => wName.includes(w)).length >= 2) return true;
+        return false;
+      });
+
+      let loadedOutcomes = [];
+      let extractedMeta = {};
+
+      if (matchedWord) {
+        setSelectedFileId(String(matchedWord.id));
+        const modData = await api.getFileModule(Number(matchedWord.id));
+        loadedOutcomes = modData?.outcomes || [];
+        const docElements = modData?.doc_elements || [];
+        extractedMeta = extractMetaFromDocElements(docElements);
+        setPrerequisite(extractedMeta.prerequisite || '');
+      } else {
+        setSelectedFileId('');
+      }
+
+      // გარემო რესურსებიდან
+      const matchedRes = resourcesList.find((r) => {
+        const rName = normStr(r.module_name || '');
+        return targetName && (rName.includes(targetName) || targetName.includes(rName));
+      });
+      const envFromDb = matchedRes?.learning_environment || extractedMeta.envResources || '';
+
+      if (loadedOutcomes.length > 0) {
+        const mappedOutcomes = loadedOutcomes.map((oc, idx) => {
+          const parsedTopics = splitTopicsText(oc.topics);
+          const rawContact = Number(oc.hours_contact || 0);
+          const rawEval = Number(oc.hours_evaluation || 0);
+
+          return {
+            id: oc.id || idx + 1,
+            outcome_number: oc.outcome_number || String(idx + 1),
+            outcome_name: oc.outcome_name || '',
+            hours_contact: rawContact,
+            hours_evaluation: rawEval,
+            topicsList: parsedTopics.length > 0 ? parsedTopics : [oc.topics || oc.outcome_name || `თემა ${idx + 1}`],
+            criteria: oc.criteria || '',
+            teaching_methods: extractedMeta.teachingMethods || 'ლექცია დემონსტრირებით;\nპრაქტიკული სამუშაო;\nდისკუსია/დებატები;\nჯგუფური მუშაობა.',
+            environment_resources: envFromDb,
+            summative_assessment: oc.assessment_direction || 'პრაქტიკული დავალება',
+          };
+        });
+
+        setOutcomesConfig(mappedOutcomes);
+
+        const initialMerges = {};
+        for (let i = 0; i < mappedOutcomes.length - 1; i++) {
+          const a = (mappedOutcomes[i].summative_assessment || '').trim().toLowerCase();
+          const b = (mappedOutcomes[i + 1].summative_assessment || '').trim().toLowerCase();
+          if (a && b && a === b) {
+            initialMerges[`${i}-${i + 1}`] = true;
+          }
+        }
+        setPairMerges(initialMerges);
+      } else {
+        setOutcomesConfig([
+          {
+            id: 1,
+            outcome_number: '1',
+            outcome_name: mTitle || 'სწავლის შედეგი 1',
+            hours_contact: Number(p.hours_contact || 20),
+            hours_evaluation: Number(p.hours_evaluation || 0),
+            topicsList: [mTitle || 'მოდულის თემატიკა'],
+            criteria: '',
+            teaching_methods: 'ლექცია დემონსტრირებით;\nპრაქტიკული სამუშაო.',
+            environment_resources: envFromDb,
+            summative_assessment: 'პრაქტიკული დავალება',
+          },
+        ]);
+        setPairMerges({});
+      }
+    } catch (err) {
+      setError(err.message || 'მოდულის მონაცემების ჩატვირთვა ვერ მოხერხდა');
+    } finally {
+      setModuleLoading(false);
     }
   };
 
@@ -1533,7 +1725,7 @@ export default function CalendarGenerator() {
           <div style={{ background: '#fff', borderRadius: '14px', padding: '22px', border: '1px solid #e2e8f0' }}>
             <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <BookOpen size={18} color="#2563eb" />
-              ნაბიჯი 1: ბაზიდან მოდულის, სასწავლო გეგმისა და საწყისი თარიღის გადამოწმება
+              ნაბიჯი 1: სასწავლო გეგმის, მოდულისა და საწყისი თარიღის გადამოწმება
             </h3>
 
             {moduleLoading && (
@@ -1545,19 +1737,19 @@ export default function CalendarGenerator() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                  1) აირჩიეთ მოდული ბაზიდან (Word-ის მოდულის აღწერა):
+                  1) სასწავლო გეგმა (Excel):
                 </label>
                 <select
-                  value={selectedFileId}
-                  onChange={(e) => handleSelectWordFile(e.target.value)}
+                  value={selectedPlanFileId}
+                  onChange={(e) => handleSelectPlanFile(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
                 >
-                  {wordModuleFiles.length === 0 && (
-                    <option value="">-- ბაზაში Word-ის მოდული ვერ მოიძებნა --</option>
+                  {planFilesList.length === 0 && (
+                    <option value="">-- ბაზაში სასწავლო გეგმა ვერ მოიძებნა --</option>
                   )}
-                  {wordModuleFiles.map((f) => (
-                    <option key={f.id} value={String(f.id)}>
-                      [{f.organization_short || 'მოდული'}] {f.original_name} ({f.module_type_name || 'პროფესიული'})
+                  {planFilesList.map((pf) => (
+                    <option key={pf.id} value={String(pf.id)}>
+                      [{pf.organization_short || 'სასწავლო გეგმა'}] {pf.original_name}
                     </option>
                   ))}
                 </select>
@@ -1565,39 +1757,43 @@ export default function CalendarGenerator() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                  2) დაკავშირებული სასწავლო გეგმა ბაზიდან (Excel-ის კვირეული დატვირთვა):
+                  2) აირჩიეთ მოდული:
                 </label>
                 <select
                   value={selectedPlanKey}
-                  onChange={(e) => handlePlanChange(e.target.value)}
+                  onChange={(e) => handleSelectPlanModule(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
                 >
-                  <option value="">-- ავტომატური / ხელით მითითებული კვირები --</option>
-                  {dbPlans.map((p) => (
-                    <option key={p._key} value={p._key}>
-                      [{p.organization_code === '22_skola' ? '22 სკოლა' : 'WEA'}] {p.module_name} ({p.registration_number || '-'}) — საკონტაქტო: {p.hours_contact} სთ, შეფასება: {p.hours_evaluation} სთ
-                    </option>
-                  ))}
+                  {dbPlans.filter((p) => !selectedPlanFileId || String(p.file_id) === String(selectedPlanFileId)).length === 0 && (
+                    <option value="">-- ამ სასწავლო გეგმაში მოდულები არ არის --</option>
+                  )}
+                  {dbPlans
+                    .filter((p) => !selectedPlanFileId || String(p.file_id) === String(selectedPlanFileId))
+                    .map((p, idx) => (
+                      <option key={p._key} value={p._key}>
+                        {idx + 1}. {p.module_name} ({p.registration_number ? `კოდი: ${p.registration_number}, ` : ''}{p.status || 'პროფესიული'}) — საკონტაქტო: {p.hours_contact} სთ
+                      </option>
+                    ))}
                 </select>
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                  3) მასწავლებელი / მოდულის განმახორციელებელი (ბაზიდან):
+                  3) მასწავლებელი / მოდულის განმახორციელებელი:
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="text"
                     value={teacherName}
                     onChange={(e) => setTeacherName(e.target.value)}
-                    placeholder="აირჩიეთ ან ჩაწერეთ მასწავლებელი"
+                    placeholder="მასწავლებლის სახელი"
                     style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
                   />
                   {dbTeachers.length > 0 && (
                     <select
                       onChange={(e) => e.target.value && setTeacherName(e.target.value)}
                       value={teacherName}
-                      style={{ width: '180px', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                      style={{ width: '200px', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
                     >
                       <option value="">-- მასწავლებლები ({dbTeachers.length}) --</option>
                       {dbTeachers.map((t) => (

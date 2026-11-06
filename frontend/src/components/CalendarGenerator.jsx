@@ -320,8 +320,37 @@ export default function CalendarGenerator() {
   const [distributionMethod, setDistributionMethod] = useState(1); // 1, 2, ან 3
   const [selectedDays, setSelectedDays] = useState([1, 3, 5]);
   const [dailyHourLimit, setDailyHourLimit] = useState(6);
+  // თითოეული დღის საათების განსაზღვრა (კვირის რომელ დღეს რამდენი სთ გაწეროს)
+  const [weekdayHours, setWeekdayHours] = useState({
+    1: 6, // ორშაბათი
+    2: 6, // სამშაბათი
+    3: 6, // ოთხშაბათი
+    4: 6, // ხუთშაბათი
+    5: 6, // პარასკევი
+    6: 6, // შაბათი
+  });
   const [deductEvalFromContact, setDeductEvalFromContact] = useState(false);
   const [hideIndependentInRows, setHideIndependentInRows] = useState(true);
+
+  const handleWeekdayHoursChange = (dayId, hours) => {
+    const val = Math.max(1, Math.min(10, Math.round(Number(hours) || 6)));
+    setWeekdayHours((prev) => ({
+      ...prev,
+      [dayId]: val,
+    }));
+  };
+
+  const handleSetAllWeekdayHours = (hours) => {
+    setWeekdayHours({
+      1: hours,
+      2: hours,
+      3: hours,
+      4: hours,
+      5: hours,
+      6: hours,
+    });
+    setDailyHourLimit(hours);
+  };
 
   // სწავლის შედეგები ბაზიდან (curriculum_outcomes)
   const [outcomesConfig, setOutcomesConfig] = useState([]);
@@ -920,28 +949,11 @@ export default function CalendarGenerator() {
     }
 
     const getDailyHoursForWeek = (acadWeekNum, weekday) => {
-      const weeklyHrsFromPlan = planWeeksMap.get(Number(acadWeekNum));
-      const fallbackLimit = Math.max(1, Math.round(Number(dailyHourLimit) || 4));
-
-      if (distributionMethod === 1) {
-        // მეთოდი 1: კვირის საათები ნაწილდება ყველა არჩეულ დღეზე მთელი რიცხვებით
-        if (weeklyHrsFromPlan !== undefined && activeWeekdays.length > 0) {
-          const totalW = Math.max(1, Math.round(Number(weeklyHrsFromPlan) || 0));
-          const numDays = activeWeekdays.length;
-          const base = Math.floor(totalW / numDays);
-          const rem = totalW % numDays;
-          const dayIndex = activeWeekdays.indexOf(weekday);
-          const assigned = (dayIndex >= 0 && dayIndex < rem) ? (base + 1) : base;
-          return Math.max(1, assigned);
-        }
-        return fallbackLimit;
+      // 1. პირველ რიგში მომხმარებლის მიერ მითითებული საათი კვირის ამ კონკრეტულ დღეზე (მაგ. ორშ=6, ოთხ=6, პარ=6):
+      if (weekdayHours && weekdayHours[weekday] !== undefined) {
+        return Math.max(1, Math.min(10, Math.round(Number(weekdayHours[weekday]) || 6)));
       }
-      if (distributionMethod === 2) {
-        // მეთოდი 2: კვირის ერთ დღეზე ნაწილდება მაქსიმუმ 2 მოდული
-        return fallbackLimit;
-      }
-      // მეთოდი 3: თანმიმდევრული შევსება
-      return fallbackLimit;
+      return Math.max(1, Math.min(10, Math.round(Number(dailyHourLimit) || 6)));
     };
 
     const detectedCollisions = [];
@@ -1633,6 +1645,7 @@ export default function CalendarGenerator() {
           distributionMethod,
           selectedDays,
           dailyHourLimit,
+          weekdayHours,
           deductEvalFromContact,
           hideIndependentInRows,
           outcomesConfig,
@@ -1679,7 +1692,8 @@ export default function CalendarGenerator() {
         setStartAcademicWeek(cfg.startAcademicWeek || 1);
         setDistributionMethod(cfg.distributionMethod || 1);
         setSelectedDays(cfg.selectedDays || [1, 3, 5]);
-        setDailyHourLimit(cfg.dailyHourLimit || 4);
+        setDailyHourLimit(cfg.dailyHourLimit || 6);
+        if (cfg.weekdayHours) setWeekdayHours(cfg.weekdayHours);
         setDeductEvalFromContact(Boolean(cfg.deductEvalFromContact));
         setHideIndependentInRows(cfg.hideIndependentInRows !== false);
         if (cfg.outcomesConfig) setOutcomesConfig(cfg.outcomesConfig);
@@ -1687,7 +1701,7 @@ export default function CalendarGenerator() {
         if (cfg.sessions) setSessions(cfg.sessions);
         if (cfg.evaluationMode) setEvaluationMode(cfg.evaluationMode);
         if (cfg.pairMerges) setPairMerges(cfg.pairMerges);
-        setStep(5);
+        setStep(6);
       }
     } catch (err) {
       setError(err.message || 'ჩატვირთვა ვერ მოხერხდა');
@@ -1783,13 +1797,14 @@ export default function CalendarGenerator() {
         </div>
 
         {/* Stepper */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '8px' }}>
           {[
-            { n: 1, title: '1. მონაცემები & მეთოდი', sub: 'ბაზიდან თარიღის გადამოწმება' },
-            { n: 2, title: '2. თარიღები & დასვენებები', sub: 'შაბათი ან შემდეგი კვირა' },
-            { n: 3, title: '3. თემები & საათები', sub: 'კორექტირება და გაერთიანება' },
-            { n: 4, title: '4. შეფასებების წესი', sub: 'შეკითხვა გაერთიანებაზე' },
-            { n: 5, title: '5. მზა კალენდარი', sub: '12-სვეტიანი დოკუმენტი & ბეჭდვა' },
+            { n: 1, title: '1. გეგმა & მოდული', sub: 'მოდულისა და შედეგების არჩევა' },
+            { n: 2, title: '2. დღეები & საათები', sub: 'კვირის დღეებზე საათების გაწერა' },
+            { n: 3, title: '3. დასვენების დღეები', sub: 'უქმეების შემოწმება & კომპენსაცია' },
+            { n: 4, title: '4. თემები & საათები', sub: 'კორექტირება და გაერთიანება' },
+            { n: 5, title: '5. შეფასებების წესი', sub: 'შეკითხვა გაერთიანებაზე' },
+            { n: 6, title: '6. მზა კალენდარი', sub: '12-სვეტიანი დოკუმენტი & ბეჭდვა' },
           ].map((item) => {
             const active = step === item.n;
             const done = step > item.n;
@@ -1797,7 +1812,7 @@ export default function CalendarGenerator() {
               <button
                 key={item.n}
                 onClick={() => {
-                  if (item.n >= 2 && sessions.length === 0) {
+                  if (item.n >= 4 && sessions.length === 0) {
                     runScheduleEngine(holidayResolutions);
                   }
                   setStep(item.n);
@@ -1994,199 +2009,6 @@ export default function CalendarGenerator() {
             </div>
           </div>
 
-          {/* თარიღის გადამოწმება და განაწილების 3 მეთოდი */}
-          <div style={{ background: '#fff', borderRadius: '14px', padding: '22px', border: '1px solid #e2e8f0' }}>
-            <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Clock size={18} color="#2563eb" />
-              საწყისი თარიღის გადამოწმება და სასწავლო დღეების განაწილების მეთოდი (1, 2 ან 3)
-            </h3>
-
-            <div style={{
-              background: '#eff6ff',
-              border: '1px solid #bfdbfe',
-              borderRadius: '10px',
-              padding: '14px 16px',
-              marginBottom: '18px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '12px'
-            }}>
-              <div>
-                <div style={{ fontWeight: 700, color: '#1e3a8a', fontSize: '14px' }}>
-                  გთხოვთ გადაამოწმოთ სასწავლო წლის დაწყება, მოდულის საწყისი თარიღი და სასწავლო კვირა:
-                </div>
-                <div style={{ fontSize: '12.5px', color: '#1d4ed8', marginTop: '2px' }}>
-                  სასწავლო კვირების ათვლა იწყება 15.09.2026-დან (ან თქვენ მიერ მითითებული თარიღიდან). თუ მთელი კვირა (ორშ-პარ) დასვენებაა (მაგ. ზამთრის არდადეგები), ის <strong>არ ითვლება</strong> სასწავლო კვირად. ყველა საათი ნაწილდება მხოლოდ <strong>მთელი რიცხვებით</strong>.
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>
-                    1. სასწავლო კვირა №:
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <input
-                      type="number"
-                      min="1"
-                      max="150"
-                      value={startAcademicWeek}
-                      onChange={(e) => handleStartAcademicWeekChange(e.target.value)}
-                      style={{ width: '85px', padding: '8px 12px', borderRadius: '8px', border: '2px solid #2563eb', fontWeight: 700, fontSize: '14px' }}
-                    />
-                    <span style={{ fontSize: '11.5px', background: '#dbeafe', color: '#1e40af', padding: '4px 8px', borderRadius: '6px', fontWeight: 600 }}>
-                      📅 {getWeekPeriodString(startAcademicWeek, academicYearStartDate, holidays)}
-                    </span>
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>
-                    2. მოდულის დაწყების თარიღი (კვირიდან ავტომატური):
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => handleStartDateChange(e.target.value)}
-                    style={{ padding: '8px 12px', borderRadius: '8px', border: '2px solid #2563eb', fontWeight: 700, fontSize: '14px', background: '#f0fdf4' }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>
-                    დღიური საათების ლიმიტი (6 - 8 სთ):
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="8"
-                    step="1"
-                    value={dailyHourLimit}
-                    onChange={(e) => {
-                      const val = Math.round(Number(e.target.value) || 6);
-                      setDailyHourLimit(Math.max(1, Math.min(8, val)));
-                    }}
-                    style={{ width: '80px', padding: '8px 12px', borderRadius: '8px', border: '2px solid #2563eb', fontWeight: 700, fontSize: '14px' }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>
-                    სასწავლო წლის დაწყება:
-                  </label>
-                  <input
-                    type="date"
-                    value={academicYearStartDate}
-                    onChange={(e) => handleAcademicYearStartChange(e.target.value)}
-                    style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* 3 მეთოდის არჩევა */}
-            <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
-                აირჩიეთ კვირის სასწავლო დღეებზე საათების გადანაწილების მეთოდი:
-              </label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '12px' }}>
-                {[
-                  {
-                    id: 1,
-                    title: 'მეთოდი 1: ყველა არჩეულ დღეზე განაწილება',
-                    desc: 'კვირის საკონტაქტო საათები ნაწილდება კვირის ყველა მონიშნულ სასწავლო დღეზე თანაბრად.',
-                  },
-                  {
-                    id: 2,
-                    title: 'მეთოდი 2: დღეში მაქსიმუმ 2 მოდული',
-                    desc: 'კვირის ერთ სასწავლო დღეზე ნაწილდება მაქსიმუმ 2 მოდული შესაბამისი საათობრივი ლიმიტით.',
-                  },
-                  {
-                    id: 3,
-                    title: 'მეთოდი 3: თანმიმდევრული შევსება (შაბლონით)',
-                    desc: 'ჯერ ერთი მოდული ავსებს კვირის დღეს ბოლომდე, შემდეგ მეორე. პირველი კვირა აიღება შაბლონად საათების ამოწურვამდე.',
-                  },
-                ].map((m) => (
-                  <div
-                    key={m.id}
-                    onClick={() => setDistributionMethod(m.id)}
-                    style={{
-                      padding: '14px',
-                      borderRadius: '10px',
-                      border: distributionMethod === m.id ? '2px solid #2563eb' : '1px solid #cbd5e1',
-                      background: distributionMethod === m.id ? '#eff6ff' : '#ffffff',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <div style={{ fontWeight: 700, fontSize: '13.5px', color: distributionMethod === m.id ? '#1d4ed8' : '#0f172a' }}>
-                      {m.title}
-                    </div>
-                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px', lineHeight: 1.4 }}>
-                      {m.desc}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* კვირის დღეების მონიშვნა */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
-                  მონიშნეთ კვირის სასწავლო დღე(ები):
-                </label>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {WEEKDAYS.map((d) => {
-                    const active = selectedDays.includes(d.id);
-                    return (
-                      <button
-                        key={d.id}
-                        type="button"
-                        onClick={() => toggleWeekday(d.id)}
-                        style={{
-                          padding: '9px 16px',
-                          borderRadius: '8px',
-                          border: active ? '2px solid #2563eb' : '1px solid #cbd5e1',
-                          background: active ? '#2563eb' : '#f8fafc',
-                          color: active ? '#ffffff' : '#334155',
-                          fontWeight: 600,
-                          fontSize: '13px',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {d.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#334155', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={deductEvalFromContact}
-                    onChange={(e) => setDeductEvalFromContact(e.target.checked)}
-                  />
-                  <span>
-                    <strong>შეფასების საათები შედის საკონტაქტოში</strong> (საკონტაქტოს გამოაკლდეს შეფასების საათი)
-                  </span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#334155', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={hideIndependentInRows}
-                    onChange={(e) => setHideIndependentInRows(e.target.checked)}
-                  />
-                  <span>
-                    <strong>დამოუკიდებელი საათები არ გამოჩნდეს კალენდარულში</strong> (მხოლოდ საკონტაქტო და შეფასება)
-                  </span>
-                </label>
-              </div>
-            </div>
-          </div>
-
           {/* სწავლის შედეგების საათების მიმოხილვა */}
           <div style={{ background: '#fff', borderRadius: '14px', padding: '22px', border: '1px solid #e2e8f0' }}>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', color: '#0f172a' }}>
@@ -2263,7 +2085,8 @@ export default function CalendarGenerator() {
 
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
               <button
-                onClick={handleProceedToStep2}
+                type="button"
+                onClick={() => setStep(2)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -2278,7 +2101,7 @@ export default function CalendarGenerator() {
                   cursor: 'pointer',
                 }}
               >
-                <span>დადასტურება და თარიღების გენერირება (ნაბიჯი 2)</span>
+                <span>დადასტურება და დღეების საათების გაწერაზე გადასვლა (ნაბიჯი 2)</span>
                 <ArrowRight size={18} />
               </button>
             </div>
@@ -2287,16 +2110,242 @@ export default function CalendarGenerator() {
       )}
 
       {/* ========================================================================
-          ნაბიჯი 2: თარიღების გენერირება და დასვენების დღეების ინტერაქტიული მართვა
+          ნაბიჯი 2: კვირის სასწავლო დღეები და თითოეული დღის საათების განსაზღვრა
       ======================================================================== */}
       {step === 2 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div style={{ background: '#fff', borderRadius: '14px', padding: '22px', border: '1px solid #e2e8f0' }}>
+            <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock size={18} color="#2563eb" />
+              ნაბიჯი 2: კვირის სასწავლო დღეები და თითოეული დღის საათების განსაზღვრა
+            </h3>
+
+            <div style={{
+              background: '#eff6ff',
+              border: '1px solid #bfdbfe',
+              borderRadius: '10px',
+              padding: '14px 16px',
+              marginBottom: '18px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div>
+                <div style={{ fontWeight: 700, color: '#1e3a8a', fontSize: '14px' }}>
+                  სასწავლო კვირისა და მოდულის დაწყების თარიღის გადამოწმება:
+                </div>
+                <div style={{ fontSize: '12.5px', color: '#1d4ed8', marginTop: '2px' }}>
+                  სასწავლო კვირის არჩევისას მოდულის საწყისი თარიღი გამოითვლება <strong>ავტომატურად</strong>.
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>
+                    1. სასწავლო კვირა №:
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input
+                      type="number"
+                      min="1"
+                      max="150"
+                      value={startAcademicWeek}
+                      onChange={(e) => handleStartAcademicWeekChange(e.target.value)}
+                      style={{ width: '85px', padding: '8px 12px', borderRadius: '8px', border: '2px solid #2563eb', fontWeight: 700, fontSize: '14px' }}
+                    />
+                    <span style={{ fontSize: '11.5px', background: '#dbeafe', color: '#1e40af', padding: '4px 8px', borderRadius: '6px', fontWeight: 600 }}>
+                      📅 {getWeekPeriodString(startAcademicWeek, academicYearStartDate, holidays)}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>
+                    2. მოდულის დაწყების თარიღი (ავტომატური):
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => handleStartDateChange(e.target.value)}
+                    style={{ padding: '8px 12px', borderRadius: '8px', border: '2px solid #2563eb', fontWeight: 700, fontSize: '14px', background: '#f0fdf4' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>
+                    სასწავლო წლის დაწყება:
+                  </label>
+                  <input
+                    type="date"
+                    value={academicYearStartDate}
+                    onChange={(e) => handleAcademicYearStartChange(e.target.value)}
+                    style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* კვირის დღეების მონიშვნა */}
+            <div style={{ marginBottom: '18px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, color: '#334155', marginBottom: '8px' }}>
+                მონიშნეთ კვირის სასწავლო დღე(ები):
+              </label>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {WEEKDAYS.map((d) => {
+                  const active = selectedDays.includes(d.id);
+                  return (
+                    <button
+                      key={d.id}
+                      type="button"
+                      onClick={() => toggleWeekday(d.id)}
+                      style={{
+                        padding: '9px 16px',
+                        borderRadius: '8px',
+                        border: active ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                        background: active ? '#2563eb' : '#f8fafc',
+                        color: active ? '#ffffff' : '#334155',
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {d.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* თითოეული დღის საათების განსაზღვრა */}
+            <div style={{ marginBottom: '20px', padding: '18px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                    მიუთითეთ კვირის რომელ დღეს რამდენი საათი უნდა გაწეროს (ლიმიტი 6 - 8 სთ):
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                    მოდულის თემატიკა და საათები დღეებზე განაწილდება ზუსტად ამ მითითებული საათებით (და არა ფიქსირებული 5 სთ-ით).
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button type="button" onClick={() => handleSetAllWeekdayHours(6)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>ყველა დღეზე 6 სთ</button>
+                  <button type="button" onClick={() => handleSetAllWeekdayHours(7)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>ყველა დღეზე 7 სთ</button>
+                  <button type="button" onClick={() => handleSetAllWeekdayHours(8)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>ყველა დღეზე 8 სთ</button>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '12px' }}>
+                {WEEKDAYS.filter((d) => selectedDays.includes(d.id)).map((d) => (
+                  <div key={d.id} style={{ background: '#fff', border: '2px solid #2563eb', borderRadius: '10px', padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '14px', color: '#1e3a8a' }}>{d.label}</div>
+                      <div style={{ fontSize: '11px', color: '#64748b' }}>დღიური დატვირთვა</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="number"
+                        min="1"
+                        max="10"
+                        value={weekdayHours[d.id] ?? 6}
+                        onChange={(e) => handleWeekdayHoursChange(d.id, e.target.value)}
+                        style={{ width: '60px', padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', textAlign: 'center', fontWeight: 700, fontSize: '15px', color: '#1d4ed8' }}
+                      />
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>სთ</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: '12px', fontSize: '13px', color: '#334155', fontWeight: 600, textAlign: 'right' }}>
+                კვირის ჯამური დატვირთვა: <span style={{ color: '#2563eb', fontWeight: 700 }}>{selectedDays.reduce((sum, dId) => sum + (weekdayHours[dId] ?? 6), 0)} სთ/კვირაში</span>
+              </div>
+            </div>
+
+            {/* დამატებითი წესები */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px', padding: '14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#334155', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={deductEvalFromContact}
+                  onChange={(e) => setDeductEvalFromContact(e.target.checked)}
+                />
+                <span>
+                  <strong>შეფასების საათები შედის საკონტაქტოში</strong> (საკონტაქტოს გამოაკლდეს შეფასების საათი)
+                </span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#334155', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={hideIndependentInRows}
+                  onChange={(e) => setHideIndependentInRows(e.target.checked)}
+                />
+                <span>
+                  <strong>დამოუკიდებელი საათები არ გამოჩნდეს კალენდარულში</strong> (მხოლოდ საკონტაქტო და შეფასება)
+                </span>
+              </label>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '10px 18px',
+                  borderRadius: '10px',
+                  border: '1px solid #cbd5e1',
+                  background: '#fff',
+                  color: '#334155',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <ArrowLeft size={16} /> უკან (ნაბიჯი 1)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  runScheduleEngine(holidayResolutions);
+                  setStep(3);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  background: '#2563eb',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '12px 24px',
+                  borderRadius: '10px',
+                  fontSize: '14px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                <span>დასვენების დღეების შემოწმებაზე გადასვლა (ნაბიჯი 3)</span>
+                <ArrowRight size={18} />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================
+          ნაბიჯი 3: თარიღების გენერირება და დასვენების დღეების ინტერაქტიული მართვა
+      ======================================================================== */}
+      {step === 3 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ background: '#fff', borderRadius: '14px', padding: '22px', border: '1px solid #e2e8f0' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '16px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <AlertTriangle size={18} color="#d97706" />
-                  ნაბიჯი 2: დასვენების დღეების შემოწმება და გაცდენილი საათების გაწერა
+                  ნაბიჯი 3: დასვენების დღეების შემოწმება და გაცდენილი საათების გაწერა
                 </h3>
                 <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
                   თუ სასწავლო დღეს უწევს დასვენება, აირჩიეთ: გავწეროთ შაბათზე (კომპენსაცია) თუ გავაგრძელოთ შემდეგ კვირაზე წინა კვირის შაბლონით.
@@ -2450,7 +2499,7 @@ export default function CalendarGenerator() {
 
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between' }}>
               <button
-                onClick={() => setStep(1)}
+                onClick={() => setStep(2)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -2464,11 +2513,14 @@ export default function CalendarGenerator() {
                   cursor: 'pointer',
                 }}
               >
-                <ArrowLeft size={16} /> უკან (ნაბიჯი 1)
+                <ArrowLeft size={16} /> უკან (ნაბიჯი 2)
               </button>
 
               <button
-                onClick={() => setStep(3)}
+                onClick={() => {
+                  runScheduleEngine(holidayResolutions);
+                  setStep(4);
+                }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -2483,7 +2535,7 @@ export default function CalendarGenerator() {
                   cursor: 'pointer',
                 }}
               >
-                <span>თემებისა და საათების გაწერაზე გადასვლა (ნაბიჯი 3)</span>
+                <span>თემებისა და საათების გაწერაზე გადასვლა (ნაბიჯი 4)</span>
                 <ArrowRight size={18} />
               </button>
             </div>
@@ -2492,14 +2544,14 @@ export default function CalendarGenerator() {
       )}
 
       {/* ========================================================================
-          ნაბიჯი 3: თემებისა და საათების ინტერაქტიული რედაქტორი
+          ნაბიჯი 4: თემებისა და საათების ინტერაქტიული რედაქტორი
       ======================================================================== */}
-      {step === 3 && (
+      {step === 4 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ background: '#fff', borderRadius: '14px', padding: '22px', border: '1px solid #e2e8f0' }}>
             <h3 style={{ margin: '0 0 6px 0', fontSize: '16px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Edit3 size={18} color="#2563eb" />
-              ნაბიჯი 3: თემებისა და საათების ინტერაქტიული კორექტირება
+              ნაბიჯი 4: თემებისა და საათების ინტერაქტიული კორექტირება
             </h3>
             <p style={{ margin: '0 0 18px 0', fontSize: '13px', color: '#64748b' }}>
               თემები წამოღებულია მოდულის Word ფაილიდან. შეგიძლიათ შეცვალოთ თემის ტექსტი, გააერთიანოთ თემები, დაამატოთ ახალი შეხვედრა ან ხელით გადაწეროთ საათების რაოდენობა.
@@ -2691,7 +2743,7 @@ export default function CalendarGenerator() {
 
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between' }}>
               <button
-                onClick={() => setStep(2)}
+                onClick={() => setStep(3)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -2705,11 +2757,11 @@ export default function CalendarGenerator() {
                   cursor: 'pointer',
                 }}
               >
-                <ArrowLeft size={16} /> უკან (ნაბიჯი 2)
+                <ArrowLeft size={16} /> უკან (ნაბიჯი 3)
               </button>
 
               <button
-                onClick={() => setStep(4)}
+                onClick={() => setStep(5)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -2724,7 +2776,7 @@ export default function CalendarGenerator() {
                   cursor: 'pointer',
                 }}
               >
-                <span>შეფასებების კონფიგურაციაზე გადასვლა (ნაბიჯი 4)</span>
+                <span>შეფასებების კონფიგურაციაზე გადასვლა (ნაბიჯი 5)</span>
                 <ArrowRight size={18} />
               </button>
             </div>
@@ -2733,14 +2785,14 @@ export default function CalendarGenerator() {
       )}
 
       {/* ========================================================================
-          ნაბიჯი 4: შეფასებების გაერთიანების შეკითხვა და კრიტერიუმების რედაქტირება
+          ნაბიჯი 5: შეფასებების გაერთიანების შეკითხვა და კრიტერიუმების რედაქტირება
       ======================================================================== */}
-      {step === 4 && (
+      {step === 5 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div style={{ background: '#fff', borderRadius: '14px', padding: '22px', border: '1px solid #e2e8f0' }}>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <HelpCircle size={20} color="#2563eb" />
-              ნაბიჯი 4: შეკითხვა შეფასების საათების დანიშვნასა და გაერთიანებაზე
+              ნაბიჯი 5: შეკითხვა შეფასების საათების დანიშვნასა და გაერთიანებაზე
             </h3>
 
             <div style={{
@@ -2905,7 +2957,7 @@ export default function CalendarGenerator() {
 
             <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between' }}>
               <button
-                onClick={() => setStep(3)}
+                onClick={() => setStep(4)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -2919,11 +2971,11 @@ export default function CalendarGenerator() {
                   cursor: 'pointer',
                 }}
               >
-                <ArrowLeft size={16} /> უკან (ნაბიჯი 3)
+                <ArrowLeft size={16} /> უკან (ნაბიჯი 4)
               </button>
 
               <button
-                onClick={() => setStep(5)}
+                onClick={() => setStep(6)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -2939,7 +2991,7 @@ export default function CalendarGenerator() {
                 }}
               >
                 <Sparkles size={18} />
-                <span>ოფიციალური 12-სვეტიანი კალენდარული გეგმის ნახვა (ნაბიჯი 5)</span>
+                <span>ოფიციალური 12-სვეტიანი კალენდარული გეგმის ნახვა (ნაბიჯი 6)</span>
               </button>
             </div>
           </div>
@@ -2947,9 +2999,9 @@ export default function CalendarGenerator() {
       )}
 
       {/* ========================================================================
-          ნაბიჯი 5: ოფიციალური 12-სვეტიანი კალენდარული გეგმა (CalendarDocument.jsx)
+          ნაბიჯი 6: ოფიციალური 12-სვეტიანი კალენდარული გეგმა (CalendarDocument.jsx)
       ======================================================================== */}
-      {step === 5 && (
+      {step === 6 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div className="no-print" style={{
             background: '#ffffff',
@@ -2964,7 +3016,7 @@ export default function CalendarGenerator() {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <button
-                onClick={() => setStep(4)}
+                onClick={() => setStep(5)}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -2979,7 +3031,7 @@ export default function CalendarGenerator() {
                   cursor: 'pointer',
                 }}
               >
-                <ArrowLeft size={15} /> რედაქტირებაზე დაბრუნება
+                <ArrowLeft size={15} /> რედაქტირებაზე დაბრუნება (ნაბიჯი 5)
               </button>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#475569' }}>

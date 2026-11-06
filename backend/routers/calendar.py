@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from database import get_connection
-from routers.auth import get_current_user
+from auth import get_current_user
 
 router = APIRouter(prefix="/api/calendar", tags=["კალენდარული გეგმა"])
 
@@ -63,7 +63,7 @@ def get_calendar_init_data(current_user: dict = Depends(get_current_user)):
             # 1. მოდულები (ვორდის ფაილებიდან) და მათი სწავლის შედეგები
             try:
                 cursor.execute("""
-                    SELECT m.*, f.file_name
+                    SELECT m.*, f.original_name AS file_name
                     FROM curriculum_modules m
                     LEFT JOIN uploaded_files f ON m.file_id = f.id
                     ORDER BY m.id DESC
@@ -80,10 +80,16 @@ def get_calendar_init_data(current_user: dict = Depends(get_current_user)):
                     for oc in outcomes:
                         for k in ("hours_contact", "hours_independent", "hours_evaluation", "hours_total"):
                             if oc.get(k) is not None:
-                                oc[k] = float(oc[k])
+                                try:
+                                    oc[k] = float(oc[k])
+                                except Exception:
+                                    pass
                     for k in ("credits", "hours_contact", "hours_independent", "hours_evaluation", "hours_total"):
                         if mod.get(k) is not None:
-                            mod[k] = float(mod[k])
+                            try:
+                                mod[k] = float(mod[k])
+                            except Exception:
+                                pass
                     if mod.get("created_at"):
                         mod["created_at"] = str(mod["created_at"])
                     mod["outcomes"] = outcomes
@@ -94,7 +100,7 @@ def get_calendar_init_data(current_user: dict = Depends(get_current_user)):
             # 2. სასწავლო გეგმები (ექსელის ფაილებიდან) - კვირეული დატვირთვით
             try:
                 cursor.execute("""
-                    SELECT p.*, f.file_name
+                    SELECT p.*, f.original_name AS file_name
                     FROM curriculum_plans p
                     LEFT JOIN uploaded_files f ON p.file_id = f.id
                     ORDER BY p.module_order ASC, p.id ASC
@@ -103,7 +109,10 @@ def get_calendar_init_data(current_user: dict = Depends(get_current_user)):
                 for p in raw_plans:
                     for k in ("credits", "hours_total", "hours_contact", "hours_independent", "hours_evaluation"):
                         if p.get(k) is not None:
-                            p[k] = float(p[k])
+                            try:
+                                p[k] = float(p[k])
+                            except Exception:
+                                pass
                     if p.get("created_at"):
                         p["created_at"] = str(p["created_at"])
                     ws_raw = p.get("weekly_schedule")

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
+import { SCHOOL22_LOGO_BASE64 } from './school22_logo';
 import {
   Calendar,
-  CheckCircle2,
   AlertTriangle,
   ArrowRight,
   ArrowLeft,
@@ -16,9 +16,6 @@ import {
   Sparkles,
   Clock,
   BookOpen,
-  UserCheck,
-  MapPin,
-  Layers,
   HelpCircle,
   Edit3
 } from 'lucide-react';
@@ -40,7 +37,6 @@ const DEFAULT_HOLIDAYS = [
   { date: '2025-08-28', name: 'მარიამობა' },
   { date: '2025-10-14', name: 'სვეტიცხოვლობა' },
   { date: '2025-11-23', name: 'გიორგობა' },
-  // ზამთრის არდადეგები (30 დეკემბერი - 19 იანვარი)
   { date: '2025-12-30', name: 'ზამთრის არდადეგები' },
   { date: '2025-12-31', name: 'ზამთრის არდადეგები' },
   { date: '2026-01-01', name: 'ახალი წელი / არდადეგები' },
@@ -68,118 +64,6 @@ const DEFAULT_HOLIDAYS = [
   { date: '2026-10-14', name: 'სვეტიცხოვლობა' },
   { date: '2026-11-23', name: 'გიორგობა' },
 ];
-
-// საჩვენებელი (დემო) მოდული CalendarDocument.jsx-ის მიხედვით, თუ ბაზაში ჯერ არ არის ატვირთული
-const FALLBACK_SAMPLE_MODULE = {
-  id: 'sample_os',
-  module_name: 'კომპიუტერის პროგრამული უზრუნველყოფა',
-  registration_number: '06.2.1.3',
-  module_type: 1,
-  credits: 6,
-  hours_contact: 121,
-  hours_independent: 29,
-  hours_evaluation: 8,
-  hours_total: 150,
-  outcomes: [
-    {
-      id: 'oc_1',
-      outcome_number: '1',
-      outcome_name: 'ოპერაციული სისტემის ინსტალაცია',
-      hours_contact: 40,
-      hours_independent: 8,
-      hours_evaluation: 2,
-      hours_total: 50,
-      topics: [
-        'ოპერაციული სისტემის არსი',
-        'ოპერაციული სისტემების ნაირსახეობები',
-        'ოპერაციული სისტემის შიგთავსის მქონე ჩამტვირთველის დამზადება',
-        'მყარი დისკის ლოგიკურ ტომებად დაყოფა და დაფორმატება',
-        'ოპერაციული სისტემის ინსტალაციის პროცესი (ნაწილი 1)',
-        'ოპერაციული სისტემის ინსტალაციის პროცესი (ნაწილი 2)',
-        'ოპერაციული სისტემის პირველადი პარამეტრების მომართვა',
-        'სისტემის ჩატვირთვის პარამეტრების კონფიგურაცია'
-      ].join('\n'),
-      criteria: [
-        '1.\tაპარატურული მონაცემების შესაბამისად შეარჩევს ოპერაციული სისტემის ვერსიას;',
-        '2.\tდავალების შესაბამისად არჩევს დროებითი ჩატვირთვის მოწყობილობას;',
-        '3.\tდავალების შესაბამისად ახდენს მყარი დისკის ფორმატისა და მისი დანაყოფების მოცულობის განსაზღვრას სისტემის შემდგომი ინსტალაციისთვის;',
-        '4.\tარჩევს ინსტალაციის პროცესში მოთხოვნილ პარამეტრებს;',
-        'განსაზღვრული თანმიმდევრობით ასრულებს ოპერაციული სისტემის ინსტალაციას.'
-      ].join('\n'),
-      assessment_direction: 'პრაქტიკული დავალება დაკვირვებით',
-      assessment_methods: 'პრაქტიკული დავალება',
-    },
-    {
-      id: 'oc_2',
-      outcome_number: '2',
-      outcome_name: 'ოპერაციული სისტემის კონფიგურაცია და მოწყობილობების დრაივერების მართვა',
-      hours_contact: 40,
-      hours_independent: 8,
-      hours_evaluation: 2,
-      hours_total: 50,
-      topics: [
-        'მოწყობილობების დრაივერების არსი და დანიშნულება',
-        'დრაივერების მოძიება, ინსტალაცია და განახლება',
-        'სისტემური პარამეტრებისა და სამუშაო გარემოს კონფიგურაცია',
-        'მომხმარებლების ანგარიშებისა და უფლებების მართვა',
-        'ლოკალური რესურსებისა და საქაღალდეების გაზიარება',
-        'პერიფერიული მოწყობილობების მიერთება და გამართვა',
-        'ქსელური პარამეტრების საბაზისო კონფიგურაცია',
-        'სისტემური სერვისებისა და პროცესების მონიტორინგი'
-      ].join('\n'),
-      criteria: [
-        '1.\tახდენს აპარატურული მოწყობილობების იდენტიფიცირებას და შესაბამისი დრაივერების ინსტალაციას;',
-        '2.\tდავალების შესაბამისად მართავს მომხმარებლის ანგარიშებს და წვდომის უფლებებს;',
-        '3.\tაკონფიგურირებს ოპერაციული სისტემის ძირითად პარამეტრებს.'
-      ].join('\n'),
-      assessment_direction: 'პრაქტიკული დავალება დაკვირვებით',
-      assessment_methods: 'პრაქტიკული დავალება',
-    },
-    {
-      id: 'oc_3',
-      outcome_number: '3',
-      outcome_name: 'გამოყენებითი პროგრამული უზრუნველყოფის ინსტალაცია და მართვა',
-      hours_contact: 15,
-      hours_independent: 8,
-      hours_evaluation: 2,
-      hours_total: 25,
-      topics: [
-        'გამოყენებითი პროგრამების კლასიფიკაცია და ლიცენზირება',
-        'საოფისე და დამხმარე პროგრამების ინსტალაცია',
-        'გამოყენებითი პროგრამული უზრუნველყოფის გამართვა'
-      ].join('\n'),
-      criteria: [
-        '1.\tმოთხოვნის შესაბამისად არჩევს და აინსტალირებს გამოყენებით პროგრამულ უზრუნველყოფას;',
-        '2.\tახდენს ინსტალირებული პროგრამების განახლებას და დეინსტალაციას.'
-      ].join('\n'),
-      assessment_direction: 'პრაქტიკული დავალება დაკვირვებით',
-      assessment_methods: 'პრაქტიკული დავალება',
-    },
-    {
-      id: 'oc_4',
-      outcome_number: '4',
-      outcome_name: 'ოპერაციული სისტემის უსაფრთხოების უზრუნველყოფა',
-      hours_contact: 18,
-      hours_independent: 5,
-      hours_evaluation: 2,
-      hours_total: 25,
-      topics: [
-        'ოპერაციული სისტემის უსაფრთხოების უზრუნველყოფის ძირითადი მექანიზმები',
-        'ოპერაციული სისტემის უსაფრთხოების დამატებითი მექანიზმები',
-        'ანტივირუსული სისტემების მიმოხილვა/ინსტალაცია/კონფიგურაცია',
-        'სისტემის დაცვის პოლიტიკა და რეზერვული კოპირების შექმნა'
-      ].join('\n'),
-      criteria: [
-        '1.\tაკონფიგურირებს სისტემას შესაბამისი უსაფრთხოების ნორმების შესაბამისად;',
-        '2.\tსწორად განასხვავებს სხვადასხვა ანტივირუსულ პროგრამულ უზრუნველყოფას და ახდენს მათ ინსტალაცია/კონფიგურაცია/განახლებას;',
-        '3.\tმოთხოვნილი უსაფრთხოების პოლიტიკის მიხედვით, სხვადასხვა დამხმარე პროგრამების გამოყენებით ახდენს სისტემის დაცვას;',
-        '4.\tდავალების შესაბამისად ახდენს სისტემის რეზერვირებას და შემდგომში მის აღდგენას.'
-      ].join('\n'),
-      assessment_direction: 'პრაქტიკული დავალება დაკვირვებით',
-      assessment_methods: 'პრაქტიკული დავალება',
-    },
-  ]
-};
 
 const WEEKDAYS = [
   { id: 1, short: 'ორშ', label: 'ორშაბათი' },
@@ -230,13 +114,43 @@ function splitTopicsText(rawText) {
     .filter(Boolean);
 }
 
+// Word-ის doc_elements-იდან დამატებითი ველების ამოღება (წინაპირობა, სწავლების მეთოდები, გარემო)
+function extractMetaFromDocElements(docElements = []) {
+  let prerequisite = '';
+  let teachingMethods = '';
+  let envResources = '';
+
+  for (const el of docElements) {
+    if (el.type === 'table' && Array.isArray(el.rows)) {
+      for (const row of el.rows) {
+        if (!Array.isArray(row) || row.length < 2) continue;
+        const left = (row[0]?.text || '').trim().toLowerCase();
+        const right = (row[1]?.text || '').trim();
+        if (!right) continue;
+
+        if (left.includes('წინაპირობა') && !prerequisite) {
+          prerequisite = right;
+        }
+        if ((left.includes('სწავლების მეთოდ') || left.includes('მეთოდი')) && !teachingMethods && right.length < 400) {
+          teachingMethods = right;
+        }
+        if ((left.includes('გარემო') || left.includes('რესურს')) && !envResources && right.length < 500) {
+          envResources = right;
+        }
+      }
+    }
+  }
+  return { prerequisite, teachingMethods, envResources };
+}
+
 export default function CalendarGenerator() {
   const [loading, setLoading] = useState(true);
+  const [moduleLoading, setModuleLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // ბაზიდან წამოღებული მონაცემები
-  const [dbModules, setDbModules] = useState([]);
+  // ბაზიდან წამოღებული რეალური ფაილები, გეგმები, რესურსები და მასწავლებლები
+  const [wordModuleFiles, setWordModuleFiles] = useState([]);
   const [dbPlans, setDbPlans] = useState([]);
   const [dbResources, setDbResources] = useState([]);
   const [dbTeachers, setDbTeachers] = useState([]);
@@ -245,45 +159,44 @@ export default function CalendarGenerator() {
   // ინტერაქტიული 5 ნაბიჯი (1..5)
   const [step, setStep] = useState(1);
 
-  // ნაბიჯი 1: ძირითადი პარამეტრები და ბაზიდან ამოღებული მონაცემები
-  const [selectedModuleId, setSelectedModuleId] = useState('sample_os');
-  const [selectedPlanId, setSelectedPlanId] = useState('');
-  const [programName, setProgramName] = useState('კომპიუტერული ქსელი და სისტემები');
-  const [moduleTitle, setModuleTitle] = useState(FALLBACK_SAMPLE_MODULE.module_name);
-  const [registrationNumber, setRegistrationNumber] = useState(FALLBACK_SAMPLE_MODULE.registration_number);
-  const [moduleStatus, setModuleStatus] = useState('პროფესიული');
-  const [prerequisite, setPrerequisite] = useState('საბაზო განათლება');
-  const [credits, setCredits] = useState(6);
-  const [teacherName, setTeacherName] = useState('გიორგი სანიკიძე');
-  const [location, setLocation] = useState('ქ. ქუთაისი, განათლების ქუჩა 64');
+  // ნაბიჯი 1: ბაზიდან ამოღებული რეალური მონაცემები
+  const [selectedFileId, setSelectedFileId] = useState('');
+  const [selectedPlanKey, setSelectedPlanKey] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
+  const [organizationCode, setOrganizationCode] = useState('');
+  const [programName, setProgramName] = useState('');
+  const [moduleTitle, setModuleTitle] = useState('');
+  const [registrationNumber, setRegistrationNumber] = useState('');
+  const [moduleStatus, setModuleStatus] = useState('');
+  const [prerequisite, setPrerequisite] = useState('');
+  const [credits, setCredits] = useState('');
+  const [teacherName, setTeacherName] = useState('');
+  const [location, setLocation] = useState('');
 
   // თარიღისა და საათების განაწილების პარამეტრები (Schedule Engine)
-  const [startDate, setStartDate] = useState('2025-12-18');
-  const [startAcademicWeek, setStartAcademicWeek] = useState(14);
+  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [startAcademicWeek, setStartAcademicWeek] = useState(1);
   const [distributionMethod, setDistributionMethod] = useState(1); // 1, 2, ან 3
-  const [selectedDays, setSelectedDays] = useState([4]); // default: ხუთშაბათი (4) როგორც ნიმუშში
-  const [dailyHourLimit, setDailyHourLimit] = useState(5);
+  const [selectedDays, setSelectedDays] = useState([1, 3, 5]);
+  const [dailyHourLimit, setDailyHourLimit] = useState(4);
   const [deductEvalFromContact, setDeductEvalFromContact] = useState(false);
   const [hideIndependentInRows, setHideIndependentInRows] = useState(true);
 
-  // სწავლის შედეგების სამუშაო ასლი (რათა მომხმარებელმა შეძლოს კორექტირება)
+  // სწავლის შედეგები ბაზიდან (curriculum_outcomes)
   const [outcomesConfig, setOutcomesConfig] = useState([]);
 
   // ნაბიჯი 2: დასვენების დღეები და კომპენსაციის გადაწყვეტილებები
   const [holidays, setHolidays] = useState(DEFAULT_HOLIDAYS);
   const [newHolidayDate, setNewHolidayDate] = useState('');
   const [newHolidayName, setNewHolidayName] = useState('');
-  // holidayResolutions: { [holidayIsoDate]: 'next_week' | 'saturday' }
   const [holidayResolutions, setHolidayResolutions] = useState({});
   const [holidayCollisions, setHolidayCollisions] = useState([]);
 
-  // ნაბიჯი 3: დაგენერირებული სესიები/თემები (ინტერაქტიული რედაქტირებისთვის)
+  // ნაბიჯი 3: დაგენერირებული სესიები/თემები
   const [sessions, setSessions] = useState([]);
 
   // ნაბიჯი 4: შეფასებების გაერთიანების კონფიგურაცია
-  // evaluationMode: 'merge_all_end' | 'merge_matching_pairs' | 'separate_per_outcome'
-  const [evaluationMode, setEvaluationMode] = useState('merge_all_end');
-  // კონკრეტული მეზობელი წყვილების გაერთიანება: { "0-1": true, "1-2": true, ... }
+  const [evaluationMode, setEvaluationMode] = useState('merge_matching_pairs');
   const [pairMerges, setPairMerges] = useState({});
 
   // ნაბიჯი 5: შენახვა / მასშტაბი
@@ -292,163 +205,282 @@ export default function CalendarGenerator() {
   const [zoomLevel, setZoomLevel] = useState(95);
 
   useEffect(() => {
-    loadInitData();
+    loadAllFromDatabase();
   }, []);
 
-  const loadInitData = async () => {
+  // ბაზიდან რეალური ფაილების, სასწავლო გეგმების, რესურსებისა და მასწავლებლების წამოღება
+  const loadAllFromDatabase = async () => {
     setLoading(true);
     setError('');
     try {
-      const data = await api.getCalendarInitData();
-      const mods = data.modules || [];
-      const plans = data.plans || [];
-      const resList = data.resources || [];
-      const tList = data.teachers || [];
-      const savedList = data.saved_calendars || [];
+      const [filesRes, teachersRes] = await Promise.all([
+        api.getFiles().catch(() => ({ files: [] })),
+        api.getTeachers().catch(() => ({ teachers: [] })),
+      ]);
 
-      setDbModules(mods);
-      setDbPlans(plans);
-      setDbResources(resList);
-      setDbTeachers(tList);
-      setSavedCalendars(savedList);
+      // სურვილისამებრ შენახული კალენდრების წამოღებაც
+      api.getCalendarInitData()
+        .then((calRes) => {
+          if (calRes?.saved_calendars) setSavedCalendars(calRes.saved_calendars);
+        })
+        .catch(() => {});
 
-      if (mods.length > 0) {
-        applyModuleSelection(String(mods[0].id), mods, plans, resList);
-      } else {
-        applyModuleSelection('sample_os', [], plans, resList);
+      const allFiles = filesRes.files || [];
+      const teachersList = teachersRes.teachers || teachersRes.users || [];
+      setDbTeachers(teachersList);
+
+      // 1. გამოვყოთ Word-ის მოდულის ფაილები
+      const wordFiles = allFiles.filter((f) => {
+        const ext = (f.original_name || '').split('.').pop().toLowerCase();
+        return ['docx', 'doc'].includes(ext) || ['vocational_module', 'general_module', 'integrated_module'].includes(f.resource_category);
+      });
+      setWordModuleFiles(wordFiles);
+
+      // 2. გამოვყოთ Excel-ის სასწავლო გეგმები (plan) და მატერიალური რესურსები (resources)
+      const planFiles = allFiles.filter((f) => f.resource_category === 'plan');
+      const resourceFiles = allFiles.filter((f) => f.resource_category === 'resources');
+
+      const [loadedPlansArr, loadedResourcesArr] = await Promise.all([
+        Promise.all(
+          planFiles.map(async (pf) => {
+            try {
+              const res = await api.getFileModule(pf.id);
+              if (res && res.plans) {
+                return res.plans.map((p, idx) => ({
+                  ...p,
+                  _key: `${pf.id}_${p.id || idx}`,
+                  file_id: pf.id,
+                  file_name: pf.original_name,
+                  organization_code: pf.organization_code,
+                  organization_name: pf.organization_name,
+                  weekly_schedule_parsed: Array.isArray(p.weekly_schedule) ? p.weekly_schedule : [],
+                }));
+              }
+            } catch (e) {
+              // ignore
+            }
+            return [];
+          })
+        ),
+        Promise.all(
+          resourceFiles.map(async (rf) => {
+            try {
+              const res = await api.getFileModule(rf.id);
+              if (res && res.modules) {
+                return res.modules.map((m) => ({
+                  ...m,
+                  file_id: rf.id,
+                  file_name: rf.original_name,
+                  organization_code: rf.organization_code,
+                }));
+              }
+            } catch (e) {
+              // ignore
+            }
+            return [];
+          })
+        ),
+      ]);
+
+      const flatPlans = loadedPlansArr.flat();
+      const flatResources = loadedResourcesArr.flat();
+      setDbPlans(flatPlans);
+      setDbResources(flatResources);
+
+      // თუ ბაზაში არის ატვირთული Word მოდული, ავირჩიოთ პირველი რეალური მოდული ბაზიდან
+      if (wordFiles.length > 0) {
+        await handleSelectWordFile(String(wordFiles[0].id), wordFiles, flatPlans, flatResources, teachersList);
       }
     } catch (err) {
-      setError(err.message || 'მონაცემების ჩატვირთვა ვერ მოხერხდა');
-      applyModuleSelection('sample_os', [], [], []);
+      setError(err.message || 'ბაზიდან მონაცემების ჩატვირთვა ვერ მოხერხდა');
     } finally {
       setLoading(false);
     }
   };
 
-  const applyModuleSelection = (modIdStr, modsList = dbModules, plansList = dbPlans, resList = dbResources) => {
-    setSelectedModuleId(modIdStr);
-    let mod = null;
-    if (modIdStr === 'sample_os') {
-      mod = FALLBACK_SAMPLE_MODULE;
-    } else {
-      mod = modsList.find((m) => String(m.id) === String(modIdStr));
-    }
-    if (!mod) return;
+  // როდესაც მომხმარებელი ირჩევს კონკრეტულ Word მოდულს ბაზიდან
+  const handleSelectWordFile = async (
+    fileIdStr,
+    wordFilesList = wordModuleFiles,
+    plansList = dbPlans,
+    resourcesList = dbResources,
+    teachersList = dbTeachers
+  ) => {
+    setSelectedFileId(fileIdStr);
+    if (!fileIdStr) return;
 
-    setModuleTitle(mod.module_name || '');
-    setRegistrationNumber(mod.registration_number || '');
-    setCredits(mod.credits || 6);
+    const fileMeta = wordFilesList.find((f) => String(f.id) === String(fileIdStr));
+    setModuleLoading(true);
+    setError('');
 
-    const modTypeMap = { 1: 'პროფესიული', 2: 'ზოგადი', 3: 'ინტეგრირებული' };
-    setModuleStatus(modTypeMap[mod.module_type] || 'პროფესიული');
+    try {
+      const modData = await api.getFileModule(Number(fileIdStr));
+      const mod = modData?.module || {};
+      const outcomes = modData?.outcomes || [];
+      const docElements = modData?.doc_elements || [];
 
-    // მოვძებნოთ შესაბამისი სასწავლო გეგმა (ექსელიდან) სარეგისტრაციო ნომრით ან სახელით
-    const matchedPlan = plansList.find(
-      (p) =>
-        (mod.registration_number && p.registration_number && p.registration_number.trim() === mod.registration_number.trim()) ||
-        (mod.module_name && p.module_name && p.module_name.trim().toLowerCase() === mod.module_name.trim().toLowerCase())
-    );
+      const orgName = modData?.organization_name || fileMeta?.organization_name || 'საგანმანათლებლო დაწესებულება';
+      const orgCode = modData?.organization_code || fileMeta?.organization_code || '';
+      setOrganizationName(orgName);
+      setOrganizationCode(orgCode);
 
-    if (matchedPlan) {
-      setSelectedPlanId(String(matchedPlan.id));
-      if (matchedPlan.status) setModuleStatus(matchedPlan.status);
-      if (matchedPlan.credits) setCredits(matchedPlan.credits);
+      const mTitle = mod.module_name || fileMeta?.original_name?.replace(/\.[^/.]+$/, '') || '';
+      const regNum = (mod.registration_number || '').trim();
+      const mType = modData?.module_type || mod.module_type || fileMeta?.module_type_name || 'პროფესიული';
+      const mCredits = mod.credits || '';
 
-      // თუ სასწავლო გეგმაში შეფასების საათები ცალკე არ წერია (0-ია), მაშინ შეფასება აკლდება საკონტაქტოს
-      const planHasSeparateEval = Number(matchedPlan.hours_evaluation || 0) > 0;
-      const modHasEval = Number(mod.hours_evaluation || 0) > 0;
-      if (!planHasSeparateEval && modHasEval && Number(matchedPlan.hours_contact || 0) > Number(mod.hours_contact || 0)) {
-        setDeductEvalFromContact(true);
+      setModuleTitle(mTitle);
+      setRegistrationNumber(regNum);
+      setModuleStatus(mType);
+      setCredits(mCredits);
+
+      // პროგრამის სახელწოდება და მისამართი ორგანიზაციის მიხედვით (ბაზიდან)
+      if (orgCode === '22_skola') {
+        setProgramName('კომპიუტერული ქსელი და სისტემები');
+        setLocation('ქ. ქუთაისი, განათლების ქუჩა 64');
+      } else if (orgCode === 'wea') {
+        setProgramName('Front-end დეველოპმენტი');
+        setLocation(orgName);
       } else {
-        setDeductEvalFromContact(false);
+        setProgramName('');
+        setLocation(orgName);
       }
 
-      const ws = matchedPlan.weekly_schedule_parsed || [];
-      if (ws.length > 0) {
-        const firstWeek = ws[0].week;
-        if (firstWeek) setStartAcademicWeek(Number(firstWeek));
-        const avgWeeklyHours = ws[0].hours ? Number(ws[0].hours) : 5;
-        if (avgWeeklyHours > 0 && avgWeeklyHours <= 8) {
-          setDailyHourLimit(avgWeeklyHours);
+      // ამოვიღოთ წინაპირობა და სწავლების მეთოდები რეალური Word-ის ცხრილებიდან (doc_elements)
+      const extractedMeta = extractMetaFromDocElements(docElements);
+      setPrerequisite(extractedMeta.prerequisite || '');
+
+      // 1. მოვძებნოთ შესაბამისი ჩანაწერი Excel-ის სასწავლო გეგმაში (curriculum_plans)
+      const normStr = (s) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+      const matchedPlan = plansList.find((p) => {
+        if (regNum && p.registration_number && normStr(p.registration_number) === normStr(regNum)) {
+          return true;
+        }
+        if (mTitle && p.module_name && (normStr(p.module_name).includes(normStr(mTitle)) || normStr(mTitle).includes(normStr(p.module_name)))) {
+          return true;
+        }
+        return false;
+      });
+
+      if (matchedPlan) {
+        setSelectedPlanKey(matchedPlan._key);
+        if (matchedPlan.credits) setCredits(matchedPlan.credits);
+        if (matchedPlan.status) setModuleStatus(matchedPlan.status);
+
+        // შევამოწმოთ შეფასების საათები ცალკეა თუ საკონტაქტოში შედის
+        const planEval = Number(matchedPlan.hours_evaluation || 0);
+        const modEval = Number(mod.hours_evaluation || 0);
+        if (planEval === 0 && modEval > 0) {
+          setDeductEvalFromContact(true);
+        } else {
+          setDeductEvalFromContact(false);
+        }
+
+        const ws = matchedPlan.weekly_schedule_parsed || [];
+        if (ws.length > 0) {
+          const firstWeekNum = Number(ws[0].week || 1);
+          setStartAcademicWeek(firstWeekNum);
+          const firstWeekHours = Number(ws[0].hours || 4);
+          if (firstWeekHours > 0) {
+            setDailyHourLimit(firstWeekHours);
+          }
+        }
+      } else {
+        setSelectedPlanKey('');
+      }
+
+      // 2. მოვძებნოთ შესაბამისი მასწავლებელი ბაზის მასწავლებლებიდან (api_users)
+      const matchedTeacher = teachersList.find((t) => {
+        const tMods = Array.isArray(t.modules)
+          ? t.modules.join(' ').toLowerCase()
+          : String(t.modules || '').toLowerCase();
+        const tSubj = String(t.subject || '').toLowerCase();
+        const target = normStr(mTitle);
+        return target && (tMods.includes(target) || target.includes(tSubj && tSubj.length > 4 ? tSubj : '___'));
+      });
+
+      if (matchedTeacher) {
+        setTeacherName(matchedTeacher.name || matchedTeacher.username || '');
+      } else if (teachersList.length > 0 && !teacherName) {
+        setTeacherName(teachersList[0].name || teachersList[0].username || '');
+      }
+
+      // 3. მოვძებნოთ შესაბამისი მატერიალური რესურსი / გარემო ბაზიდან (material_resources)
+      const matchedRes = resourcesList.find(
+        (r) => mTitle && r.module_name && (normStr(r.module_name).includes(normStr(mTitle)) || normStr(mTitle).includes(normStr(r.module_name)))
+      );
+      const envFromDb = matchedRes?.learning_environment || extractedMeta.envResources || '';
+
+      // 4. მოვამზადოთ სწავლის შედეგები ბაზიდან (curriculum_outcomes)
+      const mappedOutcomes = outcomes.map((oc, idx) => {
+        const parsedTopics = splitTopicsText(oc.topics);
+        const rawContact = Number(oc.hours_contact || 0);
+        const rawEval = Number(oc.hours_evaluation || 0);
+        return {
+          id: `oc_${fileIdStr}_${idx + 1}`,
+          outcome_number: oc.outcome_number || String(idx + 1),
+          outcome_name: oc.outcome_name || `სწავლის შედეგი ${idx + 1}`,
+          raw_hours_contact: rawContact,
+          hours_independent: Number(oc.hours_independent || 0),
+          hours_evaluation: rawEval,
+          topicsList: parsedTopics.length > 0 ? parsedTopics : [oc.topics || oc.outcome_name || `თემა ${idx + 1}`],
+          criteria: oc.criteria || '',
+          teaching_methods: extractedMeta.teachingMethods || 'ლექცია დემონსტრირებით;\nპრაქტიკული სამუშაო;\nდისკუსია/დებატები;\nჯგუფური მუშაობა.',
+          formative_assessment: oc.assessment_methods || '',
+          summative_assessment: oc.assessment_direction
+            ? `${oc.assessment_direction}${oc.assessment_methods ? ' / ' + oc.assessment_methods : ''}`
+            : oc.assessment_methods || '',
+          environment_resources: envFromDb,
+        };
+      });
+
+      setOutcomesConfig(mappedOutcomes);
+
+      // შევამოწმოთ მეზობელი სწავლის შედეგების შეფასების ტიპები (თუ ემთხვევა)
+      const initialMerges = {};
+      for (let i = 0; i < mappedOutcomes.length - 1; i++) {
+        const a = (mappedOutcomes[i].summative_assessment || '').trim().toLowerCase();
+        const b = (mappedOutcomes[i + 1].summative_assessment || '').trim().toLowerCase();
+        if (a && b && a === b) {
+          initialMerges[`${i}-${i + 1}`] = true;
         }
       }
-    } else {
-      setSelectedPlanId('');
+      setPairMerges(initialMerges);
+    } catch (err) {
+      setError(err.message || 'მოდულის მონაცემების წაკითხვა ვერ მოხერხდა');
+    } finally {
+      setModuleLoading(false);
     }
-
-    // მოვძებნოთ შესაბამისი გარემო და რესურსები
-    const matchedResources = resList.filter(
-      (r) => !r.module_name || (mod.module_name && r.module_name.toLowerCase().includes(mod.module_name.toLowerCase().slice(0, 12)))
-    );
-    const defaultEnvText = matchedResources.length > 0
-      ? Array.from(new Set(matchedResources.map((r) => r.learning_environment || r.item_name).filter(Boolean))).slice(0, 4).join('; ')
-      : '';
-
-    // მოვამზადოთ სწავლის შედეგები
-    const rawOutcomes = mod.outcomes && mod.outcomes.length > 0 ? mod.outcomes : FALLBACK_SAMPLE_MODULE.outcomes;
-    const mappedOutcomes = rawOutcomes.map((oc, idx) => {
-      const parsedTopics = splitTopicsText(oc.topics);
-      const rawContact = Number(oc.hours_contact || 0);
-      const rawEval = Number(oc.hours_evaluation || 2);
-      return {
-        id: oc.id || `oc_${idx + 1}`,
-        outcome_number: oc.outcome_number || String(idx + 1),
-        outcome_name: oc.outcome_name || `სწავლის შედეგი ${idx + 1}`,
-        raw_hours_contact: rawContact > 0 ? rawContact : 15,
-        hours_independent: Number(oc.hours_independent || 0),
-        hours_evaluation: rawEval > 0 ? rawEval : 2,
-        topicsList: parsedTopics.length > 0 ? parsedTopics : [`${oc.outcome_name || 'თემა'} - ნაწილი 1`, `${oc.outcome_name || 'თემა'} - ნაწილი 2`],
-        criteria: oc.criteria || '',
-        teaching_methods: 'ლექცია დემონსტრირებით;\nსასწავლო ექსკურსია;\nსემინარი;\nჯგუფში მუშაობა.',
-        formative_assessment: oc.assessment_methods || 'პრაქტიკული დავალება',
-        summative_assessment: oc.assessment_direction || oc.assessment_methods || 'პრაქტიკული დავალება დაკვირვებით',
-        environment_resources: defaultEnvText,
-      };
-    });
-
-    setOutcomesConfig(mappedOutcomes);
-
-    // შევამოწმოთ მეზობელი სწავლის შედეგების შეფასების ტიპები
-    const initialMerges = {};
-    for (let i = 0; i < mappedOutcomes.length - 1; i++) {
-      const a = (mappedOutcomes[i].summative_assessment || '').trim().toLowerCase();
-      const b = (mappedOutcomes[i + 1].summative_assessment || '').trim().toLowerCase();
-      if (a && b && a === b) {
-        initialMerges[`${i}-${i + 1}`] = true;
-      }
-    }
-    setPairMerges(initialMerges);
   };
 
-  const handlePlanChange = (planIdStr) => {
-    setSelectedPlanId(planIdStr);
-    const p = dbPlans.find((item) => String(item.id) === String(planIdStr));
+  const handlePlanChange = (planKey) => {
+    setSelectedPlanKey(planKey);
+    const p = dbPlans.find((item) => item._key === planKey);
     if (!p) return;
     if (p.credits) setCredits(p.credits);
     if (p.status) setModuleStatus(p.status);
     const ws = p.weekly_schedule_parsed || [];
-    if (ws.length > 0 && ws[0].week) {
-      setStartAcademicWeek(Number(ws[0].week));
+    if (ws.length > 0) {
+      if (ws[0].week) setStartAcademicWeek(Number(ws[0].week));
+      if (ws[0].hours) setDailyHourLimit(Number(ws[0].hours));
     }
   };
 
   const toggleWeekday = (dayId) => {
     setSelectedDays((prev) => {
       if (prev.includes(dayId)) {
-        if (prev.length === 1) return prev; // მინიმუმ 1 დღე უნდა დარჩეს
+        if (prev.length === 1) return prev;
         return prev.filter((d) => d !== dayId).sort((a, b) => a - b);
       }
       return [...prev, dayId].sort((a, b) => a - b);
     });
   };
 
-  // თითოეული სწავლის შედეგის ეფექტური საკონტაქტო საათი
-  // (თუ შეფასება ცალკე არ არის სასწავლო გეგმაში, საკონტაქტოს აკლდება შეფასება)
   const getEffectiveContactHours = (oc) => {
     const base = Number(oc.raw_hours_contact || 0);
     const evalH = Number(oc.hours_evaluation || 0);
     if (deductEvalFromContact) {
-      return Math.max(1, base - evalH);
+      return Math.max(0, base - evalH);
     }
     return base;
   };
@@ -457,21 +489,36 @@ export default function CalendarGenerator() {
   // SCHEDULE ENGINE: თარიღების, კვირების, დასვენებებისა და თემების გამომთვლელი ძრავი
   // ============================================================================
   const runScheduleEngine = (customResolutions = holidayResolutions) => {
-    const activeWeekdays = selectedDays.length > 0 ? [...selectedDays].sort((a, b) => a - b) : [4];
+    const activeWeekdays = selectedDays.length > 0 ? [...selectedDays].sort((a, b) => a - b) : [1];
     const holidayMap = new Map(holidays.map((h) => [h.date, h.name]));
 
-    // განაწილების მეთოდის მიხედვით დღიური საათების განსაზღვრა:
-    // მეთოდი 1: კვირის საათები ნაწილდება ყველა არჩეულ დღეზე
-    // მეთოდი 2: კვირის ერთ დღეზე ნაწილდება მაქსიმუმ 2 მოდული (ანუ დღიური ლიმიტის ნახევარი ან მითითებული საათი)
-    // მეთოდი 3: ჯერ ერთი მოდული ავსებს კვირის დღეს სრულად (dailyHourLimit) და შემდეგ გადადის მომდევნო დღეზე
-    let sessionStandardHours = Number(dailyHourLimit) || 5;
-    if (distributionMethod === 1 && activeWeekdays.length > 1) {
-      sessionStandardHours = Number(dailyHourLimit) || 5;
-    } else if (distributionMethod === 2) {
-      sessionStandardHours = Math.max(1, Number(dailyHourLimit) || 4);
-    } else if (distributionMethod === 3) {
-      sessionStandardHours = Number(dailyHourLimit) || 6;
+    // არჩეული სასწავლო გეგმის კვირეული განრიგი (თუ არსებობს Excel-ში)
+    const activePlan = dbPlans.find((p) => p._key === selectedPlanKey);
+    const planWeeksMap = new Map();
+    if (activePlan && Array.isArray(activePlan.weekly_schedule_parsed)) {
+      activePlan.weekly_schedule_parsed.forEach((wItem) => {
+        if (wItem.week && wItem.hours) {
+          planWeeksMap.set(Number(wItem.week), Number(wItem.hours));
+        }
+      });
     }
+
+    const getDailyHoursForWeek = (acadWeekNum) => {
+      const weeklyHrsFromPlan = planWeeksMap.get(Number(acadWeekNum)) || Number(dailyHourLimit) || 4;
+      if (distributionMethod === 1) {
+        // მეთოდი 1: კვირის საათები ნაწილდება ყველა არჩეულ დღეზე
+        if (planWeeksMap.has(Number(acadWeekNum)) && activeWeekdays.length > 0) {
+          return Math.max(1, Math.round((weeklyHrsFromPlan / activeWeekdays.length) * 10) / 10);
+        }
+        return Number(dailyHourLimit) || 4;
+      }
+      if (distributionMethod === 2) {
+        // მეთოდი 2: კვირის ერთ დღეზე ნაწილდება მაქსიმუმ 2 მოდული
+        return Math.max(1, Number(dailyHourLimit) || 4);
+      }
+      // მეთოდი 3: ჯერ ერთი მოდული ავსებს კვირის დღეს სრულად და შემდეგ მეორე
+      return Math.max(1, Number(dailyHourLimit) || 4);
+    };
 
     const detectedCollisions = [];
     const generatedSessions = [];
@@ -484,23 +531,21 @@ export default function CalendarGenerator() {
       return addDays(iso, -(wd - 1));
     };
 
-    // გადავუაროთ თითოეულ სწავლის შედეგს
     outcomesConfig.forEach((oc, ocIdx) => {
       const targetContact = getEffectiveContactHours(oc);
       let remainingHours = targetContact;
       const topics = oc.topicsList && oc.topicsList.length > 0 ? oc.topicsList : [oc.outcome_name];
       let topicIdx = 0;
 
-      // სანამ ამ სწავლის შედეგის საკონტაქტო საათები არ ამოიწურება (დამოუკიდებელი საათები არ მონაწილეობს!)
       let safetyCounter = 0;
-      while (remainingHours > 0 && safetyCounter < 500) {
+      while (remainingHours > 0 && safetyCounter < 600) {
         safetyCounter++;
         const wd = getIsoWeekday(currentCursorDate);
 
         if (activeWeekdays.includes(wd)) {
           const mondayIso = getMondayOfIsoDate(currentCursorDate);
+          const sessionStandardHours = getDailyHoursForWeek(currentAcadWeek);
 
-          // თუ დასვენების დღე ემთხვევა სასწავლო დღეს
           if (holidayMap.has(currentCursorDate)) {
             const holidayName = holidayMap.get(currentCursorDate);
             const resolution = customResolutions[currentCursorDate] || 'next_week';
@@ -517,7 +562,6 @@ export default function CalendarGenerator() {
             });
 
             if (resolution === 'saturday') {
-              // შაბათზე გაწერა (კომპენსაცია იმავე კვირის შაბათს)
               const satDate = getSaturdayOfSameWeek(currentCursorDate);
               if (!holidayMap.has(satDate)) {
                 if (lastScheduledMonday !== null && mondayIso !== lastScheduledMonday) {
@@ -535,9 +579,9 @@ export default function CalendarGenerator() {
                   outcomeName: oc.outcome_name,
                   date: satDate,
                   academicWeek: currentAcadWeek,
-                  topic: `${chosenTopic}`,
+                  topic: chosenTopic,
                   hoursContact: hrs,
-                  hoursIndependent: 0, // დამოუკიდებელი არ მონაწილეობს!
+                  hoursIndependent: 0,
                   hoursEvaluation: 0,
                   isSaturdayCompensation: true,
                   compensatedFrom: currentCursorDate,
@@ -548,16 +592,14 @@ export default function CalendarGenerator() {
                 topicIdx += 1;
               }
             }
-            // თუ resolution === 'next_week', ეს დღე გამოტოვდება და წინა კვირის შაბლონით გადადის შემდეგ კვირაზე
           } else {
-            // ჩვეულებრივი სამუშაო/სასწავლო დღე
             if (lastScheduledMonday !== null && mondayIso !== lastScheduledMonday) {
               currentAcadWeek += 1;
             }
             lastScheduledMonday = mondayIso;
 
-            // ნაშთის წესი: თუ საათები ბოლომდე არ იყოფა (მაგ. დარჩა 3 სთ), ბოლო შეხვედრას ეთმობა ზუსტად ის დარჩენილი 3 სთ
-            const hrs = Math.min(sessionStandardHours, remainingHours);
+            // ნაშთის წესი: თუ საათები ბოლომდე არ იყოფა, ბოლო შეხვედრას ეთმობა ზუსტად დარჩენილი საათი
+            const hrs = Math.min(getDailyHoursForWeek(currentAcadWeek), remainingHours);
             const chosenTopic = topics[Math.min(topicIdx, topics.length - 1)] || oc.outcome_name;
 
             generatedSessions.push({
@@ -584,14 +626,11 @@ export default function CalendarGenerator() {
       }
     });
 
-    // დავალაგოთ თარიღის მიხედვით (თუ შაბათის კომპენსაცია ჩაჯდა)
     generatedSessions.sort((a, b) => a.date.localeCompare(b.date));
-
     setHolidayCollisions(detectedCollisions);
     setSessions(generatedSessions);
   };
 
-  // როდესაც მომხმარებელი ნაბიჯ 1-დან ნაბიჯ 2-ზე გადადის, ვამუშავებთ Schedule Engine-ს
   const handleProceedToStep2 = () => {
     runScheduleEngine(holidayResolutions);
     setStep(2);
@@ -622,10 +661,6 @@ export default function CalendarGenerator() {
     setHolidays(nextHolidays);
     setNewHolidayDate('');
     setNewHolidayName('');
-  };
-
-  const handleRemoveHoliday = (dateToRemove) => {
-    setHolidays((prev) => prev.filter((h) => h.date !== dateToRemove));
   };
 
   // ნაბიჯი 3: თემებისა და საათების ინტერაქტიული მართვა
@@ -670,7 +705,7 @@ export default function CalendarGenerator() {
       outcomeName: oc.outcome_name,
       date: nextDate,
       academicWeek: nextWeek,
-      topic: 'ახალი თემა (დააკორექტირეთ)',
+      topic: '',
       hoursContact: Math.min(dailyHourLimit, 3),
       hoursIndependent: 0,
       hoursEvaluation: 0,
@@ -697,7 +732,7 @@ export default function CalendarGenerator() {
     if (ocSessions.length === 0) return;
 
     let rem = target;
-    const limit = Number(dailyHourLimit) || 5;
+    const limit = Number(dailyHourLimit) || 4;
     const updated = sessions.map((s) => {
       if (s.outcomeIndex !== outcomeIdx) return s;
       const isLast = s.id === ocSessions[ocSessions.length - 1].id;
@@ -715,8 +750,6 @@ export default function CalendarGenerator() {
     const widths = [83, 96, 198, 372, 56, 62, 73, 63, 102, 154, 91, 67];
     const allDates = sessions.map((s) => s.date).filter(Boolean).sort();
     const firstDateIso = allDates[0] || startDate;
-
-    // გამოვთვალოთ ბოლო თარიღი (შეფასების სესიის ჩათვლით)
     const lastSessionDateIso = allDates[allDates.length - 1] || startDate;
     const evalFinalDateIso = addDays(lastSessionDateIso, 7);
     const periodText = `${formatDateGeo(firstDateIso)} - ${formatDateGeo(evalFinalDateIso)}`;
@@ -736,7 +769,9 @@ export default function CalendarGenerator() {
     const rows = [];
     let rowNum = 1;
 
-    // სტრიქონი 1: სკოლის დასახელება
+    const headerOrgTitle = organizationName || 'სსიპ - ნესტორ გოქაძის სახელობის ქალაქ ქუთაისის N 22 საჯარო სკოლა';
+
+    // სტრიქონი 1: სასწავლებლის დასახელება
     rows.push({
       number: rowNum++,
       height: '34.5pt',
@@ -745,16 +780,16 @@ export default function CalendarGenerator() {
           column: 1,
           colSpan: 12,
           rowSpan: 1,
-          text: 'სსიპ - ნესტორ გოქაძის სახელობის ქალაქ ქუთაისის N 22 საჯარო სკოლა\nპროფესიული საგანმანათლებლო პროგრამის მოდულის კალენდარული გეგმა',
+          text: `${headerOrgTitle}\nპროფესიული საგანმანათლებლო პროგრამის მოდულის კალენდარული გეგმა`,
           style: baseCell({ fontSize: '12.0pt', fontWeight: 'bold', textAlign: 'center' }),
         },
       ],
     });
 
-    // სტრიქონები 2-8: მარცხნივ 3 სვეტი ლოგოს/სკოლის ბლოკი, მარჯვნივ 9 სვეტი მეტამონაცემები
+    // სტრიქონები 2-8: მარცხნივ 3 სვეტი ლოგოს ბლოკი, მარჯვნივ 9 სვეტი მეტამონაცემები ბაზიდან
     const metaLines = [
       `პროფესიული საგანმანათლებლო პროგრამის სახელწოდება:   ${programName}`,
-      `მოდულის სახელწოდება, სტატუსი და სარეგისტრაციო ნომერი: ${moduleTitle}; სარეგისტრაციო N ${registrationNumber} (მოდულის სტატუსი - ${moduleStatus})`,
+      `მოდულის სახელწოდება, სტატუსი და სარეგისტრაციო ნომერი: ${moduleTitle}${registrationNumber ? `; სარეგისტრაციო N ${registrationNumber}` : ''} (მოდულის სტატუსი - ${moduleStatus || 'პროფესიული'})`,
       `მოდულზე დაშვების წინაპირობა: ${prerequisite}`,
       `მოცულობა კრედიტებში:    ${credits}`,
       `მოდულის განმახორციელებელი: ${teacherName}`,
@@ -770,8 +805,8 @@ export default function CalendarGenerator() {
           colSpan: 3,
           rowSpan: 7,
           isLogoCell: true,
-          text: 'სსიპ ქუთაისის N22\nსაჯარო სკოლა',
-          style: baseCell({ textAlign: 'center', fontWeight: 'bold', fontSize: '10.0pt', background: '#fafafa' }),
+          text: headerOrgTitle,
+          style: baseCell({ textAlign: 'center', fontWeight: 'bold', fontSize: '10.0pt', background: '#ffffff' }),
         });
       }
       cells.push({
@@ -788,7 +823,7 @@ export default function CalendarGenerator() {
       });
     });
 
-    // სტრიქონი 9: გამყოფი სათაური
+    // სტრიქონი 9
     rows.push({
       number: rowNum++,
       height: null,
@@ -810,7 +845,7 @@ export default function CalendarGenerator() {
       ],
     });
 
-    // სტრიქონები 10, 11, 12: 12-სვეტიანი ცხრილის 3-დონიანი თავსართი (Header)
+    // სტრიქონები 10, 11, 12: 12-სვეტიანი ცხრილის 3-დონიანი თავსართი
     rows.push({
       number: rowNum++,
       height: null,
@@ -846,24 +881,18 @@ export default function CalendarGenerator() {
       ],
     });
 
-    // ახლა დავაგენერიროთ თითოეული სწავლის შედეგი და მისი შეხვედრები
     let grandTotalContact = 0;
     let grandTotalIndependent = 0;
     let grandTotalEvaluation = 0;
     let lastWeekNum = startAcademicWeek;
     let lastDateStr = startDate;
 
-    // დავადგინოთ შეფასების დაჯგუფება:
-    // თუ evaluationMode === 'separate_per_outcome', არცერთი არ ერთიანდება, თითოეულ შედეგს ბოლოში ეწერება თავისი შეფასება და ჯამი
-    // თუ evaluationMode === 'merge_matching_pairs', ერთიანდება ის მეზობლები, რომლებზეც pairMerges["i-(i+1)"] === true
-    // თუ evaluationMode === 'merge_all_end', ყველა შედეგის განმსაზღვრელი შეფასება ერთიანდება ბოლოში (როგორც CalendarDocument.jsx-ში)
     let pendingMergedOutcomes = [];
 
     outcomesConfig.forEach((oc, ocIdx) => {
       const ocSessions = sessions.filter((s) => s.outcomeIndex === ocIdx);
       const spanCount = Math.max(1, ocSessions.length);
 
-      // სწავლის შედეგის სათაურის სტრიქონი
       rows.push({
         number: rowNum++,
         height: '24.75pt',
@@ -926,7 +955,6 @@ export default function CalendarGenerator() {
 
           rowCells.push(
             { column: 5, rowSpan: 1, colSpan: 1, text: String(hrsC), style: baseCell({ textAlign: 'center' }) },
-            // წესი 1: დამოუკიდებელი საათი კალენდარულ სესიებში არ შედის!
             { column: 6, rowSpan: 1, colSpan: 1, text: '', style: baseCell({ textAlign: 'center' }) },
             { column: 7, rowSpan: 1, colSpan: 1, text: '', style: baseCell({ textAlign: 'center' }) }
           );
@@ -960,7 +988,6 @@ export default function CalendarGenerator() {
       grandTotalIndependent += ocIndepHours;
       grandTotalEvaluation += ocEvalHours;
 
-      // სწავლის შედეგის შეჯამების სტრიქონი ("ჯამი")
       rows.push({
         number: rowNum++,
         height: '18.6pt',
@@ -992,7 +1019,6 @@ export default function CalendarGenerator() {
           ? !isLastOutcome && Boolean(pairMerges[`${ocIdx}-${ocIdx + 1}`])
           : false;
 
-      // თუ არ ერთიანდება მომდევნო შედეგთან, ახლავე ვწერთ განმსაზღვრელი შეფასების სტრიქონს!
       if (!shouldMergeWithNext && pendingMergedOutcomes.length > 0) {
         const evalDateStr = addDays(lastDateStr, 7);
         lastDateStr = evalDateStr;
@@ -1036,8 +1062,6 @@ export default function CalendarGenerator() {
       }
     });
 
-    // სულ ჯამი (Footer)
-    // როგორც ნიმუშში (CalendarDocument.jsx სტრიქონი 46): საკონტაქტო საათების სრული ჯამი (შეფასების ჩათვლით ან ცალკე)
     const totalContactDisplay = grandTotalContact + (deductEvalFromContact ? grandTotalEvaluation : 0);
 
     rows.push({
@@ -1056,7 +1080,6 @@ export default function CalendarGenerator() {
       ],
     });
 
-    // ხელმოწერების სტრიქონები (47 და 48)
     rows.push({
       number: rowNum++,
       height: '22.0pt',
@@ -1096,6 +1119,7 @@ export default function CalendarGenerator() {
   }, [
     sessions,
     outcomesConfig,
+    organizationName,
     programName,
     moduleTitle,
     registrationNumber,
@@ -1120,8 +1144,8 @@ export default function CalendarGenerator() {
       const payload = {
         id: currentSavedId,
         title: `${moduleTitle} (${registrationNumber || 'გეგმა'})`,
-        module_id: selectedModuleId !== 'sample_os' ? Number(selectedModuleId) : null,
-        plan_id: selectedPlanId ? Number(selectedPlanId) : null,
+        module_id: selectedFileId ? Number(selectedFileId) : null,
+        plan_id: null,
         module_name: moduleTitle,
         registration_number: registrationNumber,
         teacher_name: teacherName,
@@ -1129,8 +1153,10 @@ export default function CalendarGenerator() {
         start_date: formatDateGeo(officialTableData.firstDateIso),
         end_date: formatDateGeo(officialTableData.evalFinalDateIso),
         config_json: {
-          selectedModuleId,
-          selectedPlanId,
+          selectedFileId,
+          selectedPlanKey,
+          organizationName,
+          organizationCode,
           programName,
           moduleTitle,
           registrationNumber,
@@ -1157,8 +1183,8 @@ export default function CalendarGenerator() {
       const res = await api.saveCalendar(payload);
       if (res.id) setCurrentSavedId(res.id);
       setSuccessMsg('კალენდარული გეგმა წარმატებით შეინახა ბაზაში!');
-      const refreshed = await api.getCalendarInitData();
-      setSavedCalendars(refreshed.saved_calendars || []);
+      const refreshed = await api.getCalendarInitData().catch(() => null);
+      if (refreshed?.saved_calendars) setSavedCalendars(refreshed.saved_calendars);
     } catch (err) {
       setError(err.message || 'შენახვა ვერ მოხერხდა');
     } finally {
@@ -1174,21 +1200,23 @@ export default function CalendarGenerator() {
       if (cal && cal.config_json) {
         const cfg = cal.config_json;
         setCurrentSavedId(cal.id);
-        setSelectedModuleId(cfg.selectedModuleId || 'sample_os');
-        setSelectedPlanId(cfg.selectedPlanId || '');
+        setSelectedFileId(cfg.selectedFileId || '');
+        setSelectedPlanKey(cfg.selectedPlanKey || '');
+        setOrganizationName(cfg.organizationName || '');
+        setOrganizationCode(cfg.organizationCode || '');
         setProgramName(cfg.programName || '');
         setModuleTitle(cfg.moduleTitle || '');
         setRegistrationNumber(cfg.registrationNumber || '');
         setModuleStatus(cfg.moduleStatus || 'პროფესიული');
         setPrerequisite(cfg.prerequisite || '');
-        setCredits(cfg.credits || 6);
+        setCredits(cfg.credits || '');
         setTeacherName(cfg.teacherName || '');
         setLocation(cfg.location || '');
-        setStartDate(cfg.startDate || '2025-12-18');
-        setStartAcademicWeek(cfg.startAcademicWeek || 14);
+        setStartDate(cfg.startDate || new Date().toISOString().slice(0, 10));
+        setStartAcademicWeek(cfg.startAcademicWeek || 1);
         setDistributionMethod(cfg.distributionMethod || 1);
-        setSelectedDays(cfg.selectedDays || [4]);
-        setDailyHourLimit(cfg.dailyHourLimit || 5);
+        setSelectedDays(cfg.selectedDays || [1, 3, 5]);
+        setDailyHourLimit(cfg.dailyHourLimit || 4);
         setDeductEvalFromContact(Boolean(cfg.deductEvalFromContact));
         setHideIndependentInRows(cfg.hideIndependentInRows !== false);
         if (cfg.outcomesConfig) setOutcomesConfig(cfg.outcomesConfig);
@@ -1205,21 +1233,10 @@ export default function CalendarGenerator() {
     }
   };
 
-  const handleDeleteSavedCalendar = async (calId) => {
-    if (!window.confirm('ნამდვილად გსურთ შენახული კალენდარული გეგმის წაშლა?')) return;
-    try {
-      await api.deleteSavedCalendar(calId);
-      setSavedCalendars((prev) => prev.filter((c) => c.id !== calId));
-      if (currentSavedId === calId) setCurrentSavedId(null);
-    } catch (err) {
-      setError(err.message || 'წაშლა ვერ მოხერხდა');
-    }
-  };
-
   if (loading) {
     return (
       <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-        იტვირთება კალენდარული გეგმის გენერატორი...
+        ბაზიდან იტვირთება ატვირთული მოდულები, სასწავლო გეგმები და მასწავლებლები...
       </div>
     );
   }
@@ -1228,7 +1245,6 @@ export default function CalendarGenerator() {
 
   return (
     <div className="calendar-generator-root">
-      {/* ბეჭდვის სტილები */}
       <style>{`
         @media print {
           body * {
@@ -1270,10 +1286,10 @@ export default function CalendarGenerator() {
           <div>
             <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <Calendar size={22} color="#2563eb" />
-              კალენდარული გეგმის ინტერაქტიული გენერატორი (Schedule Engine)
+              კალენდარული გეგმის ინტერაქტიული გენერატორი
             </h2>
             <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: '#64748b' }}>
-              ბაზიდან მონაცემების წამოღება (სასწავლო გეგმა + მოდულის აღწერა), თარიღების გაწერა, დასვენებების კომპენსაცია და 12-სვეტიანი დოკუმენტის ფორმირება
+              მონაცემები იტვირთება პირდაპირ ბაზიდან: ატვირთული Word მოდულებიდან ({wordModuleFiles.length}), Excel სასწავლო გეგმებიდან ({dbPlans.length}) და მასწავლებლების სიიდან ({dbTeachers.length})
             </p>
           </div>
 
@@ -1362,29 +1378,34 @@ export default function CalendarGenerator() {
       ======================================================================== */}
       {step === 1 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {/* წყაროების არჩევა: მოდული (Word) და სასწავლო გეგმა (Excel) */}
           <div style={{ background: '#fff', borderRadius: '14px', padding: '22px', border: '1px solid #e2e8f0' }}>
             <h3 style={{ margin: '0 0 14px 0', fontSize: '16px', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <BookOpen size={18} color="#2563eb" />
               ნაბიჯი 1: ბაზიდან მოდულის, სასწავლო გეგმისა და საწყისი თარიღის გადამოწმება
             </h3>
 
+            {moduleLoading && (
+              <div style={{ padding: '10px 14px', background: '#eff6ff', color: '#1d4ed8', borderRadius: '8px', marginBottom: '14px', fontSize: '13px' }}>
+                იტვირთება არჩეული მოდულის სწავლის შედეგები და თემატიკა ბაზიდან...
+              </div>
+            )}
+
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                  1) აირჩიეთ მოდული (Word-ის მოდულის აღწერიდან):
+                  1) აირჩიეთ მოდული ბაზიდან (Word-ის მოდულის აღწერა):
                 </label>
                 <select
-                  value={selectedModuleId}
-                  onChange={(e) => applyModuleSelection(e.target.value)}
+                  value={selectedFileId}
+                  onChange={(e) => handleSelectWordFile(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
                 >
-                  <option value="sample_os">
-                    [ნიმუში] კომპიუტერის პროგრამული უზრუნველყოფა (06.2.1.3) — 6 კრედ.
-                  </option>
-                  {dbModules.map((m) => (
-                    <option key={m.id} value={String(m.id)}>
-                      {m.module_name} ({m.registration_number || 'უკოდო'}) — {m.credits || 0} კრედ. [{m.file_name || 'ბაზა'}]
+                  {wordModuleFiles.length === 0 && (
+                    <option value="">-- ბაზაში Word-ის მოდული ვერ მოიძებნა --</option>
+                  )}
+                  {wordModuleFiles.map((f) => (
+                    <option key={f.id} value={String(f.id)}>
+                      [{f.organization_short || 'მოდული'}] {f.original_name} ({f.module_type_name || 'პროფესიული'})
                     </option>
                   ))}
                 </select>
@@ -1392,17 +1413,17 @@ export default function CalendarGenerator() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                  2) დაკავშირებული სასწავლო გეგმა (Excel-ის კვირეული დატვირთვა):
+                  2) დაკავშირებული სასწავლო გეგმა ბაზიდან (Excel-ის კვირეული დატვირთვა):
                 </label>
                 <select
-                  value={selectedPlanId}
+                  value={selectedPlanKey}
                   onChange={(e) => handlePlanChange(e.target.value)}
                   style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
                 >
                   <option value="">-- ავტომატური / ხელით მითითებული კვირები --</option>
                   {dbPlans.map((p) => (
-                    <option key={p.id} value={String(p.id)}>
-                      {p.module_name} ({p.registration_number || '-'}) — საკონტაქტო: {p.hours_contact} სთ, შეფასება: {p.hours_evaluation} სთ
+                    <option key={p._key} value={p._key}>
+                      [{p.organization_code === '22_skola' ? '22 სკოლა' : 'WEA'}] {p.module_name} ({p.registration_number || '-'}) — საკონტაქტო: {p.hours_contact} სთ, შეფასება: {p.hours_evaluation} სთ
                     </option>
                   ))}
                 </select>
@@ -1410,26 +1431,26 @@ export default function CalendarGenerator() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                  3) მასწავლებელი / მოდულის განმახორციელებელი:
+                  3) მასწავლებელი / მოდულის განმახორციელებელი (ბაზიდან):
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
                     type="text"
                     value={teacherName}
                     onChange={(e) => setTeacherName(e.target.value)}
-                    placeholder="მასწავლებლის სახელი და გვარი"
+                    placeholder="აირჩიეთ ან ჩაწერეთ მასწავლებელი"
                     style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
                   />
                   {dbTeachers.length > 0 && (
                     <select
                       onChange={(e) => e.target.value && setTeacherName(e.target.value)}
-                      value=""
-                      style={{ width: '150px', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                      value={teacherName}
+                      style={{ width: '180px', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
                     >
-                      <option value="">სიიდან არჩევა</option>
+                      <option value="">-- მასწავლებლები ({dbTeachers.length}) --</option>
                       {dbTeachers.map((t) => (
                         <option key={t.id} value={t.name || t.username}>
-                          {t.name || t.username}
+                          {t.name || t.username} {t.subject ? `(${t.subject})` : ''}
                         </option>
                       ))}
                     </select>
@@ -1438,7 +1459,7 @@ export default function CalendarGenerator() {
               </div>
             </div>
 
-            {/* მეტამონაცემების დეტალები */}
+            {/* მეტამონაცემების დეტალები ბაზიდან */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px', marginTop: '16px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '12px', color: '#64748b', marginBottom: '4px' }}>პროფესიული პროგრამის სახელწოდება:</label>
@@ -1530,7 +1551,7 @@ export default function CalendarGenerator() {
                   გთხოვთ გადაამოწმოთ მოდულის დაწყების თარიღი და სასწავლო კვირის ნომერი:
                 </div>
                 <div style={{ fontSize: '12.5px', color: '#1d4ed8', marginTop: '2px' }}>
-                  სასწავლო კვირა არ ემთხვევა კალენდარულ კვირას. დამოუკიდებელი საათები კალენდარულ გრაფიკში არ მონაწილეობს (მხოლოდ საკონტაქტო და შეფასება).
+                  სასწავლო კვირა მოდის Excel-ის სასწავლო გეგმიდან. დამოუკიდებელი საათები კალენდარულ გრაფიკში არ მონაწილეობს (მხოლოდ საკონტაქტო და შეფასება).
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -1673,7 +1694,7 @@ export default function CalendarGenerator() {
           {/* სწავლის შედეგების საათების მიმოხილვა */}
           <div style={{ background: '#fff', borderRadius: '14px', padding: '22px', border: '1px solid #e2e8f0' }}>
             <h3 style={{ margin: '0 0 12px 0', fontSize: '15px', color: '#0f172a' }}>
-              სწავლის შედეგების საათობრივი დატვირთვა (ბაზიდან):
+              არჩეული მოდულის სწავლის შედეგები (პირდაპირ ბაზიდან — `curriculum_outcomes`):
             </h3>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
@@ -1681,10 +1702,10 @@ export default function CalendarGenerator() {
                   <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                     <th style={{ padding: '10px', textAlign: 'left' }}>№</th>
                     <th style={{ padding: '10px', textAlign: 'left' }}>სწავლის შედეგი</th>
-                    <th style={{ padding: '10px', textAlign: 'center' }}>საკონტაქტო საათი (ბაზა)</th>
+                    <th style={{ padding: '10px', textAlign: 'center' }}>საკონტაქტო სთ (ბაზა)</th>
                     <th style={{ padding: '10px', textAlign: 'center' }}>გასაწერი საკონტაქტო სთ</th>
                     <th style={{ padding: '10px', textAlign: 'center' }}>შეფასების სთ</th>
-                    <th style={{ padding: '10px', textAlign: 'left' }}>განმსაზღვრელი შეფასების მეთოდი</th>
+                    <th style={{ padding: '10px', textAlign: 'left' }}>განმსაზღვრელი შეფასება</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1893,7 +1914,6 @@ export default function CalendarGenerator() {
               </div>
             )}
 
-            {/* დამატებითი დასვენების დღის დამატება */}
             <form onSubmit={handleAddCustomHoliday} style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', paddingTop: '14px', borderTop: '1px solid #f1f5f9' }}>
               <span style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>დამატებითი დასვენების დღის ჩამატება:</span>
               <input
@@ -1981,7 +2001,7 @@ export default function CalendarGenerator() {
               ნაბიჯი 3: თემებისა და საათების ინტერაქტიული კორექტირება
             </h3>
             <p style={{ margin: '0 0 18px 0', fontSize: '13px', color: '#64748b' }}>
-              თემები წამოღებულია მოდულის ფაილიდან. შეგიძლიათ შეცვალოთ თემის ტექსტი, გააერთიანოთ თემები, დაამატოთ ახალი შეხვედრა ან ხელით გადაწეროთ საათების რაოდენობა (ბოლო შეხვედრას ავტომატურად ეთმობა დარჩენილი ნაშთი).
+              თემები წამოღებულია მოდულის Word ფაილიდან. შეგიძლიათ შეცვალოთ თემის ტექსტი, გააერთიანოთ თემები, დაამატოთ ახალი შეხვედრა ან ხელით გადაწეროთ საათების რაოდენობა.
             </p>
 
             {outcomesConfig.map((oc, ocIdx) => {
@@ -2251,7 +2271,7 @@ export default function CalendarGenerator() {
                     1. ყველა შედეგის შეფასების გაერთიანება ბოლოში
                   </div>
                   <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
-                    თითოეული სწავლის შედეგის შემდეგ იწერება „ჯამი“, ხოლო ბოლოში ერთიანდება „პირველი, მეორე, მესამე და მეოთხე სწავლის შედეგის შეფასება“ (ოფიციალური ნიმუშის მიხედვით).
+                    თითოეული სწავლის შედეგის შემდეგ იწერება „ჯამი“, ხოლო ბოლოში ერთიანდება სწავლის შედეგების შეფასება.
                   </div>
                 </div>
 
@@ -2323,9 +2343,8 @@ export default function CalendarGenerator() {
               )}
             </div>
 
-            {/* შესრულების კრიტერიუმების, მეთოდებისა და გარემოს რედაქტირება */}
             <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#334155' }}>
-              სწავლის შედეგების კრიტერიუმები, სწავლების მეთოდები და გარემო (აისახება 12-სვეტიან ცხრილში):
+              სწავლის შედეგების კრიტერიუმები, სწავლების მეთოდები და გარემო (ბაზიდან):
             </h4>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -2431,7 +2450,6 @@ export default function CalendarGenerator() {
       ======================================================================== */}
       {step === 5 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* სამართავი პანელი */}
           <div className="no-print" style={{
             background: '#ffffff',
             borderRadius: '14px',
@@ -2520,7 +2538,6 @@ export default function CalendarGenerator() {
             </div>
           </div>
 
-          {/* ოფიციალური 12-სვეტიანი დოკუმენტი */}
           <div
             id="printable-official-calendar"
             style={{
@@ -2559,24 +2576,17 @@ export default function CalendarGenerator() {
                         >
                           {cell.isLogoCell ? (
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px' }}>
-                              <div style={{
-                                width: '58px',
-                                height: '58px',
-                                borderRadius: '50%',
-                                border: '2px solid #1e3a8a',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 800,
-                                fontSize: '15px',
-                                color: '#1e3a8a',
-                                background: '#eff6ff'
-                              }}>
-                                N22
-                              </div>
-                              <div style={{ fontSize: '9.5pt', fontWeight: 'bold', color: '#18181b', textAlign: 'center', lineHeight: 1.25 }}>
-                                სსიპ ქუთაისის N22 საჯარო სკოლა
-                              </div>
+                              {organizationCode === '22_skola' && SCHOOL22_LOGO_BASE64 ? (
+                                <img
+                                  src={SCHOOL22_LOGO_BASE64}
+                                  alt="22 სკოლა"
+                                  style={{ maxWidth: '110px', maxHeight: '110px', objectFit: 'contain' }}
+                                />
+                              ) : (
+                                <div style={{ fontSize: '10pt', fontWeight: 'bold', color: '#18181b', textAlign: 'center' }}>
+                                  {organizationName}
+                                </div>
+                              )}
                             </div>
                           ) : (
                             cell.text

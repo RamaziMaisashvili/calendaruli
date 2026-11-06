@@ -329,6 +329,7 @@ export default function CalendarGenerator() {
     5: 6, // პარასკევი
     6: 6, // შაბათი
   });
+  const [customDateHours, setCustomDateHours] = useState({});
   const [deductEvalFromContact, setDeductEvalFromContact] = useState(false);
   const [hideIndependentInRows, setHideIndependentInRows] = useState(true);
 
@@ -350,6 +351,15 @@ export default function CalendarGenerator() {
       6: hours,
     });
     setDailyHourLimit(hours);
+    setCustomDateHours({});
+  };
+
+  const handleCustomDateHourChange = (dateIso, val) => {
+    const num = Math.max(1, Math.min(12, Math.round(Number(val) || 1)));
+    setCustomDateHours((prev) => ({
+      ...prev,
+      [dateIso]: num,
+    }));
   };
 
   // სწავლის შედეგები ბაზიდან (curriculum_outcomes)
@@ -918,53 +928,128 @@ export default function CalendarGenerator() {
     return base;
   };
 
-  // ============================================================================
-  // SCHEDULE ENGINE: თარიღების, კვირების, დასვენებებისა და თემების გამომთვლელი ძრავი
-  // ============================================================================
-  const runScheduleEngine = (customResolutions = holidayResolutions) => {
-    const activeWeekdays = selectedDays.length > 0 ? [...selectedDays].sort((a, b) => a - b) : [1];
-    const holidayMap = new Map(holidays.map((h) => [h.date, h.name]));
+  const totalModuleContactHours = useMemo(() => {
+    const sum = outcomesConfig.reduce((acc, oc) => acc + Math.round(getEffectiveContactHours(oc)), 0);
+    return sum > 0 ? sum : (Math.round(Number(hoursContact)) || 20);
+  }, [outcomesConfig, deductEvalFromContact, hoursContact]);
 
-    // სასწავლო კვირების რუკა (15.09-დან, სრული დასვენების კვირები არ ითვლება)
+  const hourOptionsSummary = useMemo(() => {
+    const total = totalModuleContactHours;
+    const calcFor = (h) => {
+      const fullDays = Math.floor(total / h);
+      const remainder = total % h;
+      const totalDays = Math.ceil(total / h);
+      const remainingOnLastDay = remainder === 0 ? h : remainder;
+      return {
+        hoursPerDay: h,
+        totalDays,
+        fullDays,
+        remainder,
+        remainingOnLastDay,
+        isExact: remainder === 0,
+      };
+    };
+    return {
+      opt6: calcFor(6),
+      opt7: calcFor(7),
+      opt8: calcFor(8),
+    };
+  }, [totalModuleContactHours]);
+
+  // კალენდარული დღეებისა და საათების ბადის გამოთვლა
+  const buildDaySlots = (customResolutions = holidayResolutions, customHours = customDateHours) => {
+    if (!startDate || selectedDays.length === 0 || totalModuleContactHours <= 0) return { slots: [], collisions: [] };
+    const slots = [];
+    const collisions = [];
+    let remaining = totalModuleContactHours;
+    let curDate = startDate;
+    const sortedWd = [...selectedDays].sort((a, b) => a - b);
+    const holidayMap = new Map(holidays.map((h) => [h.date, h.name]));
     const { weekMap, vacationWeeksSet } = computeAcademicWeeksMap(academicYearStartDate, holidays);
 
-    const getAcadWeekForDate = (iso) => {
-      const monIso = getMondayOfIsoDate(iso);
-      const mapped = weekMap.get(monIso);
-      if (mapped !== undefined && mapped !== null) {
-        return mapped;
-      }
-      return getAcademicWeekForIsoDate(iso, academicYearStartDate, holidays);
+    const getWeek = (iso) => {
+      const mon = getMondayOfIsoDate(iso);
+      return weekMap.get(mon) ?? getAcademicWeekForIsoDate(iso, academicYearStartDate, holidays);
     };
 
-    // არჩეული სასწავლო გეგმის კვირეული განრიგი (თუ არსებობს Excel-ში)
-    const activePlan = dbPlans.find((p) => p._key === selectedPlanKey);
-    const planWeeksMap = new Map();
-    if (activePlan && Array.isArray(activePlan.weekly_schedule_parsed)) {
-      activePlan.weekly_schedule_parsed.forEach((wItem) => {
-        if (wItem.week && wItem.hours) {
-          planWeeksMap.set(Number(wItem.week), Math.round(Number(wItem.hours)));
+    let safety = 0;
+    while (remaining > 0 && safety < 800) {
+      safety++;
+      const wd = getIsoWeekday(curDate);
+      if (sortedWd.includes(wd)) {
+        const monIso = getMondayOfIsoDate(curDate);
+        const isVacationWeek = vacationWeeksSet.has(monIso);
+
+        if (holidayMap.has(curDate)) {
+          const hName = holidayMap.get(curDate);
+          const res = customResolutions[curDate] || 'next_week';
+          if (res === 'saturday') {
+            const satDate = getSaturdayOfSameWeek(curDate);
+            if (!holidayMap.has(satDate)) {
+              const standardH = weekdayHours[wd] ?? 6;
+              const plannedH = customHours[satDate] !== undefined ? Number(customHours[satDate]) : standardH;
+              const actualH = Math.min(remaining, Math.max(1, plannedH));
+              remaining -= actualH;
+              slots.push({
+                index: slots.length + 1,
+                date: satDate,
+                weekday: 6,
+                weekdayLabel: 'შაბათი (კომპენსაცია)',
+                academicWeek: getWeek(satDate),
+                hours: actualH,
+                remainingAfter: remaining,
+                isComp: true,
+                holidayName: hName,
+              });
+            }
+          } else {
+            collisions.push({
+              date: curDate,
+              holidayName: hName,
+              missedHours: weekdayHours[wd] ?? 6,
+              remainingOutcomeHours: remaining,
+              resolution: res,
+              isVacationWeek,
+            });
+          }
+        } else {
+          const standardH = weekdayHours[wd] ?? 6;
+          const plannedH = customHours[curDate] !== undefined ? Number(customHours[curDate]) : standardH;
+          const actualH = Math.min(remaining, Math.max(1, plannedH));
+          remaining -= actualH;
+          const wdObj = WEEKDAYS.find((d) => d.id === wd);
+          slots.push({
+            index: slots.length + 1,
+            date: curDate,
+            weekday: wd,
+            weekdayLabel: wdObj ? wdObj.label : `დღე ${wd}`,
+            academicWeek: getWeek(curDate),
+            hours: actualH,
+            remainingAfter: remaining,
+            isComp: false,
+          });
         }
-      });
-    }
-
-    const getDailyHoursForWeek = (acadWeekNum, weekday) => {
-      // 1. პირველ რიგში მომხმარებლის მიერ მითითებული საათი კვირის ამ კონკრეტულ დღეზე (მაგ. ორშ=6, ოთხ=6, პარ=6):
-      if (weekdayHours && weekdayHours[weekday] !== undefined) {
-        return Math.max(1, Math.min(10, Math.round(Number(weekdayHours[weekday]) || 6)));
       }
-      return Math.max(1, Math.min(10, Math.round(Number(dailyHourLimit) || 6)));
-    };
+      curDate = addDays(curDate, 1);
+    }
+    return { slots, collisions };
+  };
 
-    const detectedCollisions = [];
+  const previewDaySlots = useMemo(() => {
+    return buildDaySlots(holidayResolutions, customDateHours).slots;
+  }, [startDate, selectedDays, totalModuleContactHours, weekdayHours, customDateHours, holidays, holidayResolutions, academicYearStartDate]);
+
+  // ============================================================================
+  // SCHEDULE ENGINE: უკვე განსაზღვრულ დღეებზე თემებისა და შეფასების გადანაწილება
+  // ============================================================================
+  const runScheduleEngine = (customResolutions = holidayResolutions) => {
+    const { slots, collisions } = buildDaySlots(customResolutions, customDateHours);
     const generatedSessions = [];
-    let currentCursorDate = startDate;
 
-    outcomesConfig.forEach((oc, ocIdx) => {
+    // თემების მომზადება თითოეული სწავლის შედეგისთვის:
+    const outcomeTopicsMap = outcomesConfig.map((oc, ocIdx) => {
       const targetContact = Math.round(getEffectiveContactHours(oc));
       const rawTopics = oc.topicsList && oc.topicsList.length > 0 ? oc.topicsList : [oc.outcome_name || `თემა ${ocIdx + 1}`];
-
-      // თემების მომზადება: თითოეულ თემას თავისი საკონტაქტო საათი (მაგ: 15 სთ და 13 თემა -> პირველ ორს 2 სთ, დანარჩენ 11 თემას 1 სთ)
       let topicItems = [];
       const numT = rawTopics.length;
       if (targetContact >= numT && numT > 0) {
@@ -973,128 +1058,65 @@ export default function CalendarGenerator() {
         topicItems = rawTopics.map((t, i) => ({
           topic: t,
           hours: i < extraH ? baseH + 1 : baseH,
+          ocIdx,
+          oc,
         }));
       } else if (targetContact > 0 && numT > 0) {
-        // თუ საათები თემებზე ნაკლებია, თემები ჯგუფდება ისე, რომ არცერთი სტრიქონი არ დაიკარგოს
         for (let h = 0; h < targetContact; h++) {
           const s = Math.floor((h * numT) / targetContact);
           const e = Math.floor(((h + 1) * numT) / targetContact);
           topicItems.push({
             topic: rawTopics.slice(s, e).join('; '),
             hours: 1,
+            ocIdx,
+            oc,
           });
         }
       } else {
-        topicItems = [{ topic: oc.outcome_name || `თემა ${ocIdx + 1}`, hours: Math.max(1, targetContact) }];
+        topicItems = [{ topic: oc.outcome_name || `თემა ${ocIdx + 1}`, hours: Math.max(1, targetContact), ocIdx, oc }];
       }
+      return topicItems;
+    });
 
-      let topicItemIdx = 0;
-      let currentItemRemainingHours = topicItems[0]?.hours || 1;
-      let safetyCounter = 0;
+    const allTopicItems = outcomeTopicsMap.flat();
+    let topicIdx = 0;
+    let topicRemaining = allTopicItems[0]?.hours || 0;
 
-      while (topicItemIdx < topicItems.length && safetyCounter < 1000) {
-        safetyCounter++;
-        const wd = getIsoWeekday(currentCursorDate);
+    slots.forEach((slot) => {
+      let slotCapRemaining = slot.hours;
+      while (slotCapRemaining > 0 && topicIdx < allTopicItems.length) {
+        const curTopic = allTopicItems[topicIdx];
+        const hrsToTake = Math.min(slotCapRemaining, topicRemaining);
 
-        if (activeWeekdays.includes(wd)) {
-          const mondayIso = getMondayOfIsoDate(currentCursorDate);
-          const currentWeekForDate = getAcadWeekForDate(currentCursorDate);
-          const sessionStandardHours = getDailyHoursForWeek(currentWeekForDate, wd);
-          const isVacationWeek = vacationWeeksSet.has(mondayIso);
+        generatedSessions.push({
+          id: `sess_${curTopic.ocIdx}_${generatedSessions.length + 1}`,
+          outcomeIndex: curTopic.ocIdx,
+          outcomeNumber: curTopic.oc.outcome_number,
+          outcomeName: curTopic.oc.outcome_name,
+          date: slot.date,
+          academicWeek: slot.academicWeek,
+          topic: curTopic.topic,
+          hoursContact: hrsToTake,
+          hoursIndependent: 0,
+          hoursEvaluation: 0,
+          isSaturdayCompensation: Boolean(slot.isComp),
+          note: slot.isComp ? `შაბათის კომპენსაცია` : '',
+        });
 
-          if (holidayMap.has(currentCursorDate)) {
-            const holidayName = holidayMap.get(currentCursorDate);
-            const resolution = customResolutions[currentCursorDate] || 'next_week';
+        slotCapRemaining -= hrsToTake;
+        topicRemaining -= hrsToTake;
 
-            if (resolution === 'saturday') {
-              const satDate = getSaturdayOfSameWeek(currentCursorDate);
-              if (!holidayMap.has(satDate)) {
-                const satAcadWeek = getAcadWeekForDate(satDate);
-                let dayCap = sessionStandardHours;
-
-                while (dayCap > 0 && topicItemIdx < topicItems.length) {
-                  const item = topicItems[topicItemIdx];
-                  const hrsToTake = Math.min(dayCap, currentItemRemainingHours);
-
-                  generatedSessions.push({
-                    id: `sess_${ocIdx}_${generatedSessions.length + 1}`,
-                    outcomeIndex: ocIdx,
-                    outcomeNumber: oc.outcome_number,
-                    outcomeName: oc.outcome_name,
-                    date: satDate,
-                    academicWeek: satAcadWeek,
-                    topic: item.topic,
-                    hoursContact: hrsToTake,
-                    hoursIndependent: 0,
-                    hoursEvaluation: 0,
-                    isSaturdayCompensation: true,
-                    compensatedFrom: currentCursorDate,
-                    note: `შაბათის კომპენსაცია (${formatDateGeo(currentCursorDate)}-ის ნაცვლად)`,
-                  });
-
-                  dayCap -= hrsToTake;
-                  currentItemRemainingHours -= hrsToTake;
-                  if (currentItemRemainingHours <= 0) {
-                    topicItemIdx++;
-                    if (topicItemIdx < topicItems.length) {
-                      currentItemRemainingHours = topicItems[topicItemIdx].hours;
-                    }
-                  }
-                }
-              }
-            } else {
-              detectedCollisions.push({
-                date: currentCursorDate,
-                holidayName,
-                outcomeNumber: oc.outcome_number,
-                outcomeName: oc.outcome_name,
-                missedHours: Math.round(sessionStandardHours),
-                remainingOutcomeHours: 0,
-                resolution,
-                isVacationWeek,
-              });
-            }
-          } else {
-            // ჩვეულებრივი სასწავლო დღე:
-            let dayCap = sessionStandardHours;
-
-            while (dayCap > 0 && topicItemIdx < topicItems.length) {
-              const item = topicItems[topicItemIdx];
-              const hrsToTake = Math.min(dayCap, currentItemRemainingHours);
-
-              generatedSessions.push({
-                id: `sess_${ocIdx}_${generatedSessions.length + 1}`,
-                outcomeIndex: ocIdx,
-                outcomeNumber: oc.outcome_number,
-                outcomeName: oc.outcome_name,
-                date: currentCursorDate,
-                academicWeek: currentWeekForDate,
-                topic: item.topic,
-                hoursContact: hrsToTake,
-                hoursIndependent: 0,
-                hoursEvaluation: 0,
-                isSaturdayCompensation: false,
-                note: '',
-              });
-
-              dayCap -= hrsToTake;
-              currentItemRemainingHours -= hrsToTake;
-              if (currentItemRemainingHours <= 0) {
-                topicItemIdx++;
-                if (topicItemIdx < topicItems.length) {
-                  currentItemRemainingHours = topicItems[topicItemIdx].hours;
-                }
-              }
-            }
+        if (topicRemaining <= 0) {
+          topicIdx++;
+          if (topicIdx < allTopicItems.length) {
+            topicRemaining = allTopicItems[topicIdx].hours;
           }
         }
-
-        currentCursorDate = addDays(currentCursorDate, 1);
       }
     });
 
     generatedSessions.sort((a, b) => a.date.localeCompare(b.date));
-    setHolidayCollisions(detectedCollisions);
+    setHolidayCollisions(collisions);
     setSessions(generatedSessions);
   };
 
@@ -2217,21 +2239,198 @@ export default function CalendarGenerator() {
               </div>
             </div>
 
+            {/* 6, 7 და 8 გაკვეთილის/საათის შედარებისა და არჩევის ბარათები */}
+            <div style={{ marginBottom: '22px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+                <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                  აირჩიეთ დღიური დატვირთვის ვარიანტი (6, 7 ან 8 გაკვეთილი/სთ დღეში):
+                </div>
+                <div style={{ fontSize: '13px', background: '#dbeafe', color: '#1e40af', padding: '4px 10px', borderRadius: '8px', fontWeight: 700 }}>
+                  სულ მოდულში გასაწერი: {totalModuleContactHours} საკონტაქტო სთ
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
+                {/* 6 საათი */}
+                {(() => {
+                  const opt = hourOptionsSummary.opt6;
+                  const isSelected = selectedDays.every((dId) => (weekdayHours[dId] ?? 6) === 6);
+                  return (
+                    <div
+                      onClick={() => handleSetAllWeekdayHours(6)}
+                      style={{
+                        padding: '16px',
+                        borderRadius: '12px',
+                        border: isSelected ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                        background: isSelected ? '#eff6ff' : '#ffffff',
+                        cursor: 'pointer',
+                        boxShadow: isSelected ? '0 4px 12px rgba(37,99,235,0.12)' : 'none',
+                        transition: 'all 0.15s',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '16px', fontWeight: 800, color: isSelected ? '#1e40af' : '#0f172a' }}>6 სთ / დღეში</span>
+                          {isSelected && <span style={{ fontSize: '11px', background: '#2563eb', color: '#fff', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>არჩეულია</span>}
+                        </div>
+                        <div style={{ fontSize: '12.5px', color: '#475569', marginBottom: '6px' }}>
+                          სულ დაჭირდება: <strong>{opt.totalDays} სასწავლო დღე</strong>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#1e40af', background: '#dbeafe', padding: '6px 8px', borderRadius: '6px', fontWeight: 600, marginBottom: '6px' }}>
+                          ბოლო დღეს დარჩენილი: <strong>{opt.remainingOnLastDay} სთ</strong>
+                        </div>
+                        <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+                          {opt.isExact ? 'ყველა დღეზე სრული 6 სთ (ნაშთი: 0 სთ)' : `${opt.fullDays} დღე x 6 სთ + ბოლო დღე ${opt.remainder} სთ`}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleSetAllWeekdayHours(6); }}
+                        style={{
+                          marginTop: '12px',
+                          padding: '7px 12px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          background: isSelected ? '#2563eb' : '#f1f5f9',
+                          color: isSelected ? '#ffffff' : '#334155',
+                          fontWeight: 700,
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {isSelected ? '✓ არჩეულია 6 სთ' : 'არჩევა: 6 სთ'}
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                {/* 7 საათი */}
+                {(() => {
+                  const opt = hourOptionsSummary.opt7;
+                  const isSelected = selectedDays.every((dId) => (weekdayHours[dId] ?? 6) === 7);
+                  return (
+                    <div
+                      onClick={() => handleSetAllWeekdayHours(7)}
+                      style={{
+                        padding: '16px',
+                        borderRadius: '12px',
+                        border: isSelected ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                        background: isSelected ? '#eff6ff' : '#ffffff',
+                        cursor: 'pointer',
+                        boxShadow: isSelected ? '0 4px 12px rgba(37,99,235,0.12)' : 'none',
+                        transition: 'all 0.15s',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '16px', fontWeight: 800, color: isSelected ? '#1e40af' : '#0f172a' }}>7 სთ / დღეში</span>
+                          {isSelected && <span style={{ fontSize: '11px', background: '#2563eb', color: '#fff', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>არჩეულია</span>}
+                        </div>
+                        <div style={{ fontSize: '12.5px', color: '#475569', marginBottom: '6px' }}>
+                          სულ დაჭირდება: <strong>{opt.totalDays} სასწავლო დღე</strong>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#1e40af', background: '#dbeafe', padding: '6px 8px', borderRadius: '6px', fontWeight: 600, marginBottom: '6px' }}>
+                          ბოლო დღეს დარჩენილი: <strong>{opt.remainingOnLastDay} სთ</strong>
+                        </div>
+                        <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+                          {opt.isExact ? 'ყველა დღეზე სრული 7 სთ (ნაშთი: 0 სთ)' : `${opt.fullDays} დღე x 7 სთ + ბოლო დღე ${opt.remainder} სთ`}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleSetAllWeekdayHours(7); }}
+                        style={{
+                          marginTop: '12px',
+                          padding: '7px 12px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          background: isSelected ? '#2563eb' : '#f1f5f9',
+                          color: isSelected ? '#ffffff' : '#334155',
+                          fontWeight: 700,
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {isSelected ? '✓ არჩეულია 7 სთ' : 'არჩევა: 7 სთ'}
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                {/* 8 საათი */}
+                {(() => {
+                  const opt = hourOptionsSummary.opt8;
+                  const isSelected = selectedDays.every((dId) => (weekdayHours[dId] ?? 6) === 8);
+                  return (
+                    <div
+                      onClick={() => handleSetAllWeekdayHours(8)}
+                      style={{
+                        padding: '16px',
+                        borderRadius: '12px',
+                        border: isSelected ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                        background: isSelected ? '#eff6ff' : '#ffffff',
+                        cursor: 'pointer',
+                        boxShadow: isSelected ? '0 4px 12px rgba(37,99,235,0.12)' : 'none',
+                        transition: 'all 0.15s',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                          <span style={{ fontSize: '16px', fontWeight: 800, color: isSelected ? '#1e40af' : '#0f172a' }}>8 სთ / დღეში</span>
+                          {isSelected && <span style={{ fontSize: '11px', background: '#2563eb', color: '#fff', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>არჩეულია</span>}
+                        </div>
+                        <div style={{ fontSize: '12.5px', color: '#475569', marginBottom: '6px' }}>
+                          სულ დაჭირდება: <strong>{opt.totalDays} სასწავლო დღე</strong>
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#1e40af', background: '#dbeafe', padding: '6px 8px', borderRadius: '6px', fontWeight: 600, marginBottom: '6px' }}>
+                          ბოლო დღეს დარჩენილი: <strong>{opt.remainingOnLastDay} სთ</strong>
+                        </div>
+                        <div style={{ fontSize: '11.5px', color: '#64748b' }}>
+                          {opt.isExact ? 'ყველა დღეზე სრული 8 სთ (ნაშთი: 0 სთ)' : `${opt.fullDays} დღე x 8 სთ + ბოლო დღე ${opt.remainder} სთ`}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleSetAllWeekdayHours(8); }}
+                        style={{
+                          marginTop: '12px',
+                          padding: '7px 12px',
+                          borderRadius: '8px',
+                          border: 'none',
+                          background: isSelected ? '#2563eb' : '#f1f5f9',
+                          color: isSelected ? '#ffffff' : '#334155',
+                          fontWeight: 700,
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {isSelected ? '✓ არჩეულია 8 სთ' : 'არჩევა: 8 სთ'}
+                      </button>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
             {/* თითოეული დღის საათების განსაზღვრა */}
             <div style={{ marginBottom: '20px', padding: '18px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginBottom: '14px' }}>
                 <div>
                   <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
-                    მიუთითეთ კვირის რომელ დღეს რამდენი საათი უნდა გაწეროს (ლიმიტი 6 - 8 სთ):
+                    კვირის არჩეული დღეების ინდივიდუალური საათები:
                   </div>
                   <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
-                    მოდულის თემატიკა და საათები დღეებზე განაწილდება ზუსტად ამ მითითებული საათებით (და არა ფიქსირებული 5 სთ-ით).
+                    შეგიძლიათ თითოეულ დღეს ცალ-ცალკე განუსაზღვროთ საათები (ნაგულისხმევად 6 სთ, ლიმიტი 6 - 8 სთ).
                   </div>
-                </div>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <button type="button" onClick={() => handleSetAllWeekdayHours(6)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>ყველა დღეზე 6 სთ</button>
-                  <button type="button" onClick={() => handleSetAllWeekdayHours(7)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>ყველა დღეზე 7 სთ</button>
-                  <button type="button" onClick={() => handleSetAllWeekdayHours(8)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}>ყველა დღეზე 8 სთ</button>
                 </div>
               </div>
 
@@ -2259,6 +2458,107 @@ export default function CalendarGenerator() {
 
               <div style={{ marginTop: '12px', fontSize: '13px', color: '#334155', fontWeight: 600, textAlign: 'right' }}>
                 კვირის ჯამური დატვირთვა: <span style={{ color: '#2563eb', fontWeight: 700 }}>{selectedDays.reduce((sum, dId) => sum + (weekdayHours[dId] ?? 6), 0)} სთ/კვირაში</span>
+              </div>
+            </div>
+
+            {/* კალენდარული დღეებისა და საათების წინასწარი ბადე (განრიგი) */}
+            <div style={{ marginBottom: '22px', background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '12px', overflow: 'hidden' }}>
+              <div style={{ padding: '14px 18px', background: '#f1f5f9', borderBottom: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: '#0f172a' }}>
+                    📅 კალენდარული დღეებისა და საათების წინასწარი განრიგი:
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                    ზუსტად ჩანს თითოეულ დღეს რამდენი საათი ჩატარდება და რამდენია დარჩენილი საათების რაოდენობა მოდულში:
+                  </div>
+                </div>
+                <div style={{ fontSize: '12px', color: '#2563eb', fontWeight: 700 }}>
+                  სულ: {previewDaySlots.length} დღე ({totalModuleContactHours} სთ)
+                </div>
+              </div>
+
+              <div style={{ overflowX: 'auto', maxHeight: '340px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+                  <thead style={{ background: '#f8fafc', borderBottom: '2px solid #cbd5e1', position: 'sticky', top: 0, zIndex: 1 }}>
+                    <tr>
+                      <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>№</th>
+                      <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>თარიღი</th>
+                      <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700 }}>კვირის დღე</th>
+                      <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700, textAlign: 'center' }}>სასწავლო კვირა</th>
+                      <th style={{ padding: '10px 14px', color: '#1e40af', fontWeight: 700, textAlign: 'center' }}>ჩატარდება ამ დღეს</th>
+                      <th style={{ padding: '10px 14px', color: '#475569', fontWeight: 700, textAlign: 'right' }}>დარჩენილი სთ მოდულში</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewDaySlots.map((slot) => {
+                      const isLast = slot.remainingAfter === 0;
+                      return (
+                        <tr
+                          key={`${slot.date}_${slot.index}`}
+                          style={{
+                            borderBottom: '1px solid #f1f5f9',
+                            background: isLast ? '#f0fdf4' : slot.isComp ? '#fffbeb' : '#ffffff',
+                          }}
+                        >
+                          <td style={{ padding: '10px 14px', fontWeight: 700, color: '#64748b' }}>{slot.index}</td>
+                          <td style={{ padding: '10px 14px', fontWeight: 600, color: '#0f172a' }}>
+                            {formatDateGeo(slot.date)}
+                            {slot.isComp && (
+                              <span style={{ marginLeft: '6px', fontSize: '10.5px', background: '#fef3c7', color: '#92400e', padding: '2px 6px', borderRadius: '4px' }}>
+                                კომპენსაცია
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: '10px 14px', color: '#334155' }}>{slot.weekdayLabel}</td>
+                          <td style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#2563eb' }}>
+                            კვირა {slot.academicWeek}
+                          </td>
+                          <td style={{ padding: '8px 14px', textAlign: 'center' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                              <input
+                                type="number"
+                                min="1"
+                                max="10"
+                                value={slot.hours}
+                                onChange={(e) => handleCustomDateHourChange(slot.date, e.target.value)}
+                                style={{
+                                  width: '56px',
+                                  padding: '5px 6px',
+                                  borderRadius: '6px',
+                                  border: '1px solid #93c5fd',
+                                  textAlign: 'center',
+                                  fontWeight: 700,
+                                  fontSize: '13px',
+                                  color: '#1e40af',
+                                  background: '#fff',
+                                }}
+                              />
+                              <span style={{ fontSize: '12px', fontWeight: 600, color: '#64748b' }}>სთ</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700 }}>
+                            {isLast ? (
+                              <span style={{ color: '#15803d', background: '#dcfce7', padding: '3px 8px', borderRadius: '6px' }}>
+                                ✓ 0 სთ (მოდული დასრულდა)
+                              </span>
+                            ) : (
+                              <span style={{ color: '#d97706' }}>{slot.remainingAfter} სთ</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ padding: '12px 18px', background: '#f0fdf4', borderTop: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
+                <span style={{ fontSize: '13px', color: '#15803d', fontWeight: 700 }}>
+                  ✓ მოდულის ყველა საათი ({totalModuleContactHours} სთ) ზუსტად გაწერილია {previewDaySlots.length} დღეზე. ნაშთი: 0 სთ.
+                </span>
+                <span style={{ fontSize: '12px', color: '#166534' }}>
+                  შემდეგ ეტაპზე თემები და შეფასება ავტომატურად განაწილდება ზუსტად ამ დღეებსა და საათებზე.
+                </span>
               </div>
             </div>
 
@@ -2326,7 +2626,7 @@ export default function CalendarGenerator() {
                   cursor: 'pointer',
                 }}
               >
-                <span>დასვენების დღეების შემოწმებაზე გადასვლა (ნაბიჯი 3)</span>
+                <span>დადასტურება და თემებისა და შეფასების გადანაწილებაზე გადასვლა</span>
                 <ArrowRight size={18} />
               </button>
             </div>

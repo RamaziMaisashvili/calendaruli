@@ -1,6 +1,8 @@
 import os
 import json
 import shutil
+import logging
+import traceback
 from fastapi import APIRouter, Request, UploadFile, File, Form, Depends, HTTPException, status
 from fastapi.responses import FileResponse, JSONResponse
 
@@ -97,8 +99,22 @@ async def upload_files(
                     spath = item["saved_path"]
                     ext = os.path.splitext(fname)[1]
 
-                    with open(spath, "wb") as buffer:
-                        shutil.copyfileobj(f.file, buffer)
+                    try:
+                        f.file.seek(0)
+                    except Exception:
+                        pass
+
+                    try:
+                        with open(spath, "wb") as buffer:
+                            shutil.copyfileobj(f.file, buffer)
+                    except PermissionError:
+                        if os.path.exists(spath):
+                            try:
+                                os.remove(spath)
+                            except Exception:
+                                pass
+                        with open(spath, "wb") as buffer:
+                            shutil.copyfileobj(f.file, buffer)
 
                     fsize = os.path.getsize(spath)
 
@@ -126,21 +142,35 @@ async def upload_files(
                     proc_res = process_uploaded_file(spath, fname, conn=conn, file_id=fid)
                     summary_json = json.dumps(proc_res, ensure_ascii=False)
 
-                    cur.execute("""
-                        UPDATE uploaded_files 
-                        SET file_path = %s, stored_name = %s, file_size = %s, file_type = %s, 
-                            status = %s, processing_summary = %s, user_id = %s, created_at = CURRENT_TIMESTAMP
-                        WHERE id = %s
-                    """, (
-                        spath,
-                        fname,
-                        fsize,
-                        f.content_type or ext,
-                        proc_res.get("status", "completed"),
-                        summary_json,
-                        user["id"],
-                        fid
-                    ))
+                    try:
+                        cur.execute("""
+                            UPDATE uploaded_files 
+                            SET file_path = %s, stored_name = %s, file_size = %s, file_type = %s, 
+                                status = %s, processing_summary = %s, user_id = %s, created_at = CURRENT_TIMESTAMP
+                            WHERE id = %s
+                        """, (
+                            spath,
+                            fname,
+                            fsize,
+                            f.content_type or ext,
+                            proc_res.get("status", "completed"),
+                            summary_json,
+                            user["id"],
+                            fid
+                        ))
+                    except Exception as err:
+                        logging.warning(f"Fallback UPDATE uploaded_files due to: {err}")
+                        cur.execute("""
+                            UPDATE uploaded_files 
+                            SET file_path = %s, file_size = %s, status = %s, processing_summary = %s
+                            WHERE id = %s
+                        """, (
+                            spath,
+                            fsize,
+                            proc_res.get("status", "completed"),
+                            summary_json,
+                            fid
+                        ))
 
                     saved_records.append({
                         "id": fid,
@@ -193,6 +223,10 @@ async def upload_files(
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        print(f"\n[UPLOAD_ERROR] {str(e)}", flush=True)
+        traceback.print_exc()
+        logging.error(f"[UPLOAD_ERROR] {str(e)}\n{traceback.format_exc()}")
         raise HTTPException(
             status_code=500,
             detail=f"ფაილის დამუშავებისას მოხდა შეცდომა: {str(e)}"

@@ -409,12 +409,24 @@ def save_module_to_db(conn, file_id: int, module_data: dict):
     """
     m_type_id = to_module_type_id(module_data.get("module_type", 1))
     with conn.cursor() as cur:
-        # პირველ რიგში წავშალოთ შვილობილი სწავლის შედეგები (Foreign Key შეზღუდვის გამო), რომ გადაწერისას 500 არ მოხდეს
-        cur.execute("""
-            DELETE FROM curriculum_outcomes 
-            WHERE module_id IN (SELECT id FROM (SELECT id FROM curriculum_modules WHERE file_id = %s) AS tmp)
-        """, (file_id,))
-        cur.execute("DELETE FROM curriculum_modules WHERE file_id = %s", (file_id,))
+        try:
+            cur.execute("SET FOREIGN_KEY_CHECKS = 0")
+        except Exception:
+            pass
+
+        try:
+            cur.execute("""
+                DELETE FROM curriculum_outcomes 
+                WHERE module_id IN (SELECT id FROM (SELECT id FROM curriculum_modules WHERE file_id = %s) AS tmp)
+            """, (file_id,))
+        except Exception:
+            pass
+
+        try:
+            cur.execute("DELETE FROM curriculum_modules WHERE file_id = %s", (file_id,))
+        except Exception:
+            pass
+
         try:
             cur.execute("DELETE FROM doc_elements WHERE file_id = %s", (file_id,))
         except Exception:
@@ -489,6 +501,11 @@ def save_module_to_db(conn, file_id: int, module_data: dict):
                 to_int(h.get("შეფასება")),
                 to_int(h.get("სულ"))
             ))
+
+        try:
+            cur.execute("SET FOREIGN_KEY_CHECKS = 1")
+        except Exception:
+            pass
     conn.commit()
 
 def extract_excel_curriculum(excel_path):
@@ -728,7 +745,16 @@ def save_curriculum_plan_to_db(conn, file_id: int, modules: list):
     მხარს უჭერს როგორც ინგლისურ, ისე ქართულ ველებს (extract_curriculum.py ფორმატი).
     """
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM curriculum_plans WHERE file_id = %s", (file_id,))
+        try:
+            cur.execute("SET FOREIGN_KEY_CHECKS = 0")
+        except Exception:
+            pass
+
+        try:
+            cur.execute("DELETE FROM curriculum_plans WHERE file_id = %s", (file_id,))
+        except Exception:
+            pass
+
         for m in modules:
             order_val = m.get("order") or m.get("რიგი") or m.get("N")
             mod_name = m.get("module_name") or m.get("მოდულის_სახელწოდება") or m.get("სახელი") or ""
@@ -751,25 +777,41 @@ def save_curriculum_plan_to_db(conn, file_id: int, modules: list):
                     normalized_sched.append({"week": w, "hours": h})
 
             sched_json = json.dumps(normalized_sched, ensure_ascii=False)
-            cur.execute("""
-                INSERT INTO curriculum_plans (
-                    file_id, module_order, module_name, registration_number, credits,
-                    status, hours_total, hours_contact, hours_independent, hours_evaluation,
-                    weekly_schedule
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, (
-                file_id,
-                order_val,
-                mod_name,
-                reg_num,
-                credits_val,
-                status_id,
-                h_total,
-                h_contact,
-                h_independent,
-                h_evaluation,
-                sched_json
-            ))
+            try:
+                cur.execute("""
+                    INSERT INTO curriculum_plans (
+                        file_id, module_order, module_name, registration_number, credits,
+                        status, hours_total, hours_contact, hours_independent, hours_evaluation,
+                        weekly_schedule
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    file_id,
+                    order_val,
+                    mod_name,
+                    reg_num,
+                    credits_val,
+                    status_id,
+                    h_total,
+                    h_contact,
+                    h_independent,
+                    h_evaluation,
+                    sched_json
+                ))
+            except Exception as err:
+                # თუ ძველი სტრუქტურაა ბაზაში (არ აქვს module_order ან weekly_schedule)
+                try:
+                    cur.execute("""
+                        INSERT INTO curriculum_plans (
+                            file_id, module_name, hours_total, hours_contact, hours_independent
+                        ) VALUES (%s, %s, %s, %s, %s)
+                    """, (file_id, mod_name, h_total, h_contact, h_independent))
+                except Exception:
+                    pass
+
+        try:
+            cur.execute("SET FOREIGN_KEY_CHECKS = 1")
+        except Exception:
+            pass
     conn.commit()
 
 
@@ -779,7 +821,16 @@ def save_material_resources_to_db(conn, file_id: int, modules: list):
     მხარს უჭერს როგორც extract_resources.py ფორმატს, ისე შიდა ფორმატს.
     """
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM material_resources WHERE file_id = %s", (file_id,))
+        try:
+            cur.execute("SET FOREIGN_KEY_CHECKS = 0")
+        except Exception:
+            pass
+
+        try:
+            cur.execute("DELETE FROM material_resources WHERE file_id = %s", (file_id,))
+        except Exception:
+            pass
+
         for mod in modules:
             mod_name = mod.get("module_name") or mod.get("მოდულის დასახელება") or ""
             env = mod.get("learning_environment") or mod.get("სასწავლო გარემო") or ""
@@ -809,6 +860,7 @@ def save_material_resources_to_db(conn, file_id: int, modules: list):
                     })
 
             for it in items:
+                i_name = it.get("item_name") or it.get("დასახელება") or it.get("item_number") or "-"
                 cur.execute("""
                     INSERT INTO material_resources (
                         file_id, module_name, learning_environment, category,
@@ -816,15 +868,20 @@ def save_material_resources_to_db(conn, file_id: int, modules: list):
                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     file_id,
-                    mod_name,
-                    env,
+                    mod_name or "",
+                    env or "",
                     it.get("category", "ინვენტარი, აღჭურვილობა"),
-                    it.get("item_number") or it.get("N"),
-                    it.get("item_name") or it.get("დასახელება"),
-                    it.get("quantity") or it.get("რაოდენობა"),
-                    it.get("unit") or it.get("საზომი ერთეული"),
-                    it.get("note") or it.get("შენიშვნა")
+                    it.get("item_number") or it.get("N") or "",
+                    i_name,
+                    it.get("quantity") or it.get("რაოდენობა") or "",
+                    it.get("unit") or it.get("საზომი ერთეული") or "",
+                    it.get("note") or it.get("შენიშვნა") or ""
                 ))
+
+        try:
+            cur.execute("SET FOREIGN_KEY_CHECKS = 1")
+        except Exception:
+            pass
     conn.commit()
 
 

@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import FileUpload from './components/FileUpload';
 import TeachersCRUD from './components/TeachersCRUD';
 import StudentsCRUD from './components/StudentsCRUD';
+import CalendarGenerator from './components/CalendarGenerator';
 
 function MainApp() {
   const { isAuthenticated, loading } = useAuth();
@@ -36,6 +37,7 @@ function MainApp() {
   return (
     <DashboardLayout activeTab={activeTab} setActiveTab={setActiveTab}>
       {activeTab === 'dashboard' && <Dashboard />}
+      {activeTab === 'calendar' && <CalendarGenerator />}
       {activeTab === 'teachers' && <TeachersCRUD />}
       {activeTab === 'students' && <StudentsCRUD />}
       {activeTab === 'resources' && <FileUpload />}

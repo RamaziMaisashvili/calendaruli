@@ -249,5 +249,31 @@ export const api = {
       method: 'DELETE',
     });
   },
+
+  // კალენდარული გეგმის გენერატორი
+  getCalendarInitData: async () => {
+    return request('/api/calendar/init-data', {
+      method: 'GET',
+    });
+  },
+
+  getSavedCalendar: async (id) => {
+    return request(`/api/calendar/saved/${id}`, {
+      method: 'GET',
+    });
+  },
+
+  saveCalendar: async (data) => {
+    return request('/api/calendar/save', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteSavedCalendar: async (id) => {
+    return request(`/api/calendar/saved/${id}`, {
+      method: 'DELETE',
+    });
+  },
 };
 

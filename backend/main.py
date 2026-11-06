@@ -10,6 +10,7 @@ from routers.auth import router as auth_router
 from routers.files import router as files_router
 from routers.teachers import router as teachers_router
 from routers.students import router as students_router
+from routers.calendar import router as calendar_router
 
 # აპლიკაციის ინიციალიზაცია (მხოლოდ შესვლის წერტილი)
 app = FastAPI(
@@ -46,6 +47,7 @@ app.include_router(auth_router)
 app.include_router(files_router)
 app.include_router(teachers_router)
 app.include_router(students_router)
+app.include_router(calendar_router)
 
 @app.get("/")
 def root():

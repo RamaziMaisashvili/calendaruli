@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, UploadCloud, LogOut, BookOpen, FolderOpen, Users, GraduationCap } from 'lucide-react';
+import { LayoutDashboard, UploadCloud, LogOut, BookOpen, FolderOpen, Users, GraduationCap, Calendar } from 'lucide-react';
 
 export default function DashboardLayout({ children, activeTab, setActiveTab }) {
   const { user, logout } = useAuth();
@@ -24,6 +24,7 @@ export default function DashboardLayout({ children, activeTab, setActiveTab }) {
 
   const getPageTitle = () => {
     if (activeTab === 'dashboard') return 'დაშბორდი';
+    if (activeTab === 'calendar') return 'კალენდარული გეგმის გენერატორი';
     if (activeTab === 'teachers') return 'მასწავლებლების მართვა';
     if (activeTab === 'students') return 'სტუდენტების მართვა';
     if (activeTab === 'resources') {
@@ -57,7 +58,16 @@ export default function DashboardLayout({ children, activeTab, setActiveTab }) {
             <span>დაშბორდი</span>
           </button>
 
-          {/* 2. მასწავლებლები */}
+          {/* 2. კალენდარული გეგმა */}
+          <button
+            className={`nav-item ${activeTab === 'calendar' ? 'active' : ''}`}
+            onClick={() => setActiveTab('calendar')}
+          >
+            <Calendar size={18} />
+            <span>კალენდარული გეგმა</span>
+          </button>
+
+          {/* 3. მასწავლებლები */}
           <button
             className={`nav-item ${activeTab === 'teachers' ? 'active' : ''}`}
             onClick={() => setActiveTab('teachers')}

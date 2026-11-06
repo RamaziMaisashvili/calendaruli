@@ -409,7 +409,16 @@ def save_module_to_db(conn, file_id: int, module_data: dict):
     """
     m_type_id = to_module_type_id(module_data.get("module_type", 1))
     with conn.cursor() as cur:
+        # პირველ რიგში წავშალოთ შვილობილი სწავლის შედეგები (Foreign Key შეზღუდვის გამო), რომ გადაწერისას 500 არ მოხდეს
+        cur.execute("""
+            DELETE FROM curriculum_outcomes 
+            WHERE module_id IN (SELECT id FROM (SELECT id FROM curriculum_modules WHERE file_id = %s) AS tmp)
+        """, (file_id,))
         cur.execute("DELETE FROM curriculum_modules WHERE file_id = %s", (file_id,))
+        try:
+            cur.execute("DELETE FROM doc_elements WHERE file_id = %s", (file_id,))
+        except Exception:
+            pass
 
         try:
             cur.execute("""

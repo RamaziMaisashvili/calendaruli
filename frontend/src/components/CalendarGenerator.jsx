@@ -930,8 +930,8 @@ export default function CalendarGenerator() {
 
   const totalModuleContactHours = useMemo(() => {
     const sum = outcomesConfig.reduce((acc, oc) => acc + Math.round(getEffectiveContactHours(oc)), 0);
-    return sum > 0 ? sum : (Math.round(Number(hoursContact)) || 20);
-  }, [outcomesConfig, deductEvalFromContact, hoursContact]);
+    return sum > 0 ? sum : 20;
+  }, [outcomesConfig, deductEvalFromContact]);
 
   const hourOptionsSummary = useMemo(() => {
     const total = totalModuleContactHours;

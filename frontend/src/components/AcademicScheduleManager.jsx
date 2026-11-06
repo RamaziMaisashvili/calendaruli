@@ -559,14 +559,14 @@ export default function AcademicScheduleManager() {
         </div>
 
         {/* სტრიქონი 2: კომპაქტური კონფიგურაციის ველები */}
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', fontSize: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '10px', fontSize: '12px' }}>
           {/* შაბლონის არჩევა */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontWeight: 700, color: '#475569' }}>შაბლონი:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+            <span style={{ fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>შაბლონი:</span>
             <select
               value={selectedScheduleId}
               onChange={(e) => handleSelectSchedule(e.target.value)}
-              style={{ padding: '4px 8px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '11.5px', maxWidth: '210px' }}
+              style={{ padding: '4px 8px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '11.5px', maxWidth: '230px', boxSizing: 'border-box' }}
             >
               <option value="">-- აირჩიეთ შაბლონი --</option>
               <option value="default_template">🌟 2026-2027 საბაზო შაბლონი</option>
@@ -589,48 +589,48 @@ export default function AcademicScheduleManager() {
           </div>
 
           {/* დასახელება */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 180px' }}>
-            <span style={{ fontWeight: 700, color: '#475569' }}>სახელი:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: '1 1 180px', minWidth: '160px' }}>
+            <span style={{ fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>სახელი:</span>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              style={{ width: '100%', padding: '4px 8px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '11.5px' }}
+              style={{ width: '100%', boxSizing: 'border-box', padding: '4px 8px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '11.5px' }}
             />
           </div>
 
           {/* პროგრამა */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 180px' }}>
-            <span style={{ fontWeight: 700, color: '#475569' }}>პროგრამა:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flex: '1 1 180px', minWidth: '160px' }}>
+            <span style={{ fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>პროგრამა:</span>
             <input
               type="text"
               value={programName}
               onChange={(e) => setProgramName(e.target.value)}
-              style={{ width: '100%', padding: '4px 8px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '11.5px' }}
+              style={{ width: '100%', boxSizing: 'border-box', padding: '4px 8px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '11.5px' }}
             />
           </div>
 
           {/* სწავლის დასაწყისი */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontWeight: 700, color: '#1e3a8a' }}>დაწყება:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+            <span style={{ fontWeight: 700, color: '#1e3a8a', whiteSpace: 'nowrap' }}>დაწყება:</span>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              style={{ padding: '3px 6px', borderRadius: '5px', border: '1.5px solid #2563eb', fontSize: '11.5px', fontWeight: 700 }}
+              style={{ padding: '3px 6px', borderRadius: '5px', border: '1.5px solid #2563eb', fontSize: '11.5px', fontWeight: 700, boxSizing: 'border-box' }}
             />
           </div>
 
           {/* კვირები და გადათვლა */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontWeight: 700, color: '#475569' }}>კვირა:</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+            <span style={{ fontWeight: 700, color: '#475569', whiteSpace: 'nowrap' }}>კვირა:</span>
             <input
               type="number"
               min="10"
               max="60"
               value={totalWeeks}
               onChange={(e) => setTotalWeeks(Number(e.target.value))}
-              style={{ width: '48px', padding: '3px 5px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '11.5px', textAlign: 'center' }}
+              style={{ width: '48px', padding: '3px 5px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '11.5px', textAlign: 'center', boxSizing: 'border-box' }}
             />
             <button
               type="button"
@@ -648,6 +648,7 @@ export default function AcademicScheduleManager() {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '3px',
+                whiteSpace: 'nowrap',
               }}
             >
               <RotateCcw size={12} />

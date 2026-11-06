@@ -1495,9 +1495,8 @@ export default function CalendarGenerator() {
           : false;
 
       if (!shouldMergeWithNext && pendingMergedOutcomes.length > 0) {
-        const evalDateStr = addDays(lastDateStr, 7);
-        lastDateStr = evalDateStr;
-        lastWeekNum += 1;
+        // შეფასების თარიღი არის ბოლო საკონტაქტო დღე (ან მომდევნო სასწავლო დღე)
+        const evalDateStr = lastDateStr;
 
         const combinedEvalHours = pendingMergedOutcomes.reduce((acc, item) => acc + item.evalHours, 0);
         const ordinalNames = pendingMergedOutcomes.map((item) => GEORGIAN_ORDINAL[item.idx] || `მე-${item.number}`);
@@ -1522,7 +1521,7 @@ export default function CalendarGenerator() {
             { column: 1, rowSpan: 1, colSpan: 1, text: formatDateGeo(evalDateStr), style: baseCell({ textAlign: 'center' }) },
             { column: 2, rowSpan: 1, colSpan: 1, text: String(lastWeekNum), style: baseCell({ textAlign: 'center' }) },
             { column: 3, rowSpan: 1, colSpan: 2, text: evalLabelText, style: baseCell({ fontWeight: 'bold', textAlign: 'center' }) },
-            { column: 5, rowSpan: 1, colSpan: 1, text: String(combinedEvalHours), style: baseCell({ fontWeight: 'bold', textAlign: 'center' }) },
+            { column: 5, rowSpan: 1, colSpan: 1, text: '', style: baseCell({ textAlign: 'center' }) },
             { column: 6, rowSpan: 1, colSpan: 1, text: '', style: baseCell({ textAlign: 'center' }) },
             { column: 7, rowSpan: 1, colSpan: 1, text: String(combinedEvalHours), style: baseCell({ fontWeight: 'bold', textAlign: 'center' }) },
             { column: 8, rowSpan: 1, colSpan: 1, text: '', style: baseCell({}) },
@@ -1537,7 +1536,7 @@ export default function CalendarGenerator() {
       }
     });
 
-    const totalContactDisplay = grandTotalContact + (deductEvalFromContact ? grandTotalEvaluation : 0);
+    const totalContactDisplay = grandTotalContact;
 
     rows.push({
       number: rowNum++,

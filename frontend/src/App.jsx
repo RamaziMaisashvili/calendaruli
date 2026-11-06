@@ -11,7 +11,7 @@ import AcademicScheduleManager from './components/AcademicScheduleManager';
 
 function MainApp() {
   const { isAuthenticated, loading } = useAuth();
-  const [activeTab, setActiveTab] = useState('academic-schedule');
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   if (loading) {
     return (

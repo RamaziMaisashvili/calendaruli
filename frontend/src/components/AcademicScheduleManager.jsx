@@ -60,6 +60,23 @@ function formatShortDate(isoDate) {
   return `${parts[2]}.${parts[1]}`;
 }
 
+function formatWeekPeriod(startIso, endIso) {
+  if (!startIso || !endIso) return '';
+  const sParts = startIso.split('-');
+  const eParts = endIso.split('-');
+  if (sParts.length !== 3 || eParts.length !== 3) return `${startIso} – ${endIso}`;
+
+  const sDayMonth = `${sParts[2]}.${sParts[1]}`;
+  const eDayMonth = `${eParts[2]}.${eParts[1]}`;
+  const sYear2 = sParts[0].slice(-2);
+  const eYear2 = eParts[0].slice(-2);
+
+  if (sParts[0] !== eParts[0]) {
+    return `${sDayMonth}.${sYear2} – ${eDayMonth}.${eYear2}`;
+  }
+  return `${sDayMonth} – ${eDayMonth}.${eYear2}`;
+}
+
 function formatDateGeo(isoDate) {
   if (!isoDate) return '';
   const parts = isoDate.split('-');
@@ -725,7 +742,7 @@ export default function AcademicScheduleManager() {
               <tr style={{ borderBottom: '1.5px solid #cbd5e1', color: '#334155', fontWeight: 700 }}>
                 <th style={{ padding: '5px 6px', width: '32px', textAlign: 'center' }}>№</th>
                 <th style={{ padding: '5px 6px', width: '68px', textAlign: 'center' }}>სასწ. კვ.</th>
-                <th style={{ padding: '5px 6px', width: '105px' }}>პერიოდი</th>
+                <th style={{ padding: '5px 6px', width: '120px' }}>პერიოდი</th>
                 <th style={{ padding: '5px 6px', width: '135px' }}>კვირის ტიპი</th>
                 <th style={{ padding: '5px 6px' }}>დღეები (ორშ–შაბ)</th>
                 <th style={{ padding: '5px 6px', width: '42px', textAlign: 'center' }}>დღე</th>
@@ -777,9 +794,9 @@ export default function AcademicScheduleManager() {
                       )}
                     </td>
 
-                    {/* პერიოდი (მოკლედ) */}
+                    {/* პერიოდი (მოკლედ წლით: 10.05 – 14.05.26 / 10.05 – 14.05.27) */}
                     <td style={{ padding: '3px 6px', fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>
-                      {formatShortDate(wk.mondayDate)} – {formatShortDate(wk.fridayDate)}
+                      {formatWeekPeriod(wk.mondayDate, wk.fridayDate)}
                     </td>
 
                     {/* კვირის ტიპი */}

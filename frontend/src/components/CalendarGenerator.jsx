@@ -374,6 +374,7 @@ export default function CalendarGenerator() {
 
   // ნაბიჯი 3: დაგენერირებული სესიები/თემები
   const [sessions, setSessions] = useState([]);
+  const [activeSessionId, setActiveSessionId] = useState(null);
 
   // ნაბიჯი 4: შეფასებების გაერთიანების კონფიგურაცია
   const [evaluationMode, setEvaluationMode] = useState('merge_matching_pairs');
@@ -1187,33 +1188,67 @@ export default function CalendarGenerator() {
     setSessions(updated);
   };
 
-  const handleAddSessionToOutcome = (outcomeIdx) => {
-    const oc = outcomesConfig[outcomeIdx];
-    const ocSessions = sessions.filter((s) => s.outcomeIndex === outcomeIdx);
-    const lastSess = ocSessions.length > 0 ? ocSessions[ocSessions.length - 1] : sessions[sessions.length - 1];
-    const nextDate = lastSess ? addDays(lastSess.date, 7) : startDate;
-    const nextWeek = lastSess ? Number(lastSess.academicWeek || 1) + 1 : startAcademicWeek;
-
+  const handleInsertSessionAfter = (targetGlobalIdx) => {
+    if (targetGlobalIdx < 0 || targetGlobalIdx >= sessions.length) return;
+    const current = sessions[targetGlobalIdx];
+    const newId = `sess_manual_${Date.now()}`;
     const newSess = {
-      id: `sess_manual_${Date.now()}`,
-      outcomeIndex: outcomeIdx,
-      outcomeNumber: oc.outcome_number,
-      outcomeName: oc.outcome_name,
-      date: nextDate,
-      academicWeek: nextWeek,
+      id: newId,
+      outcomeIndex: current.outcomeIndex,
+      outcomeNumber: current.outcomeNumber,
+      outcomeName: current.outcomeName,
+      date: current.date,
+      academicWeek: current.academicWeek,
       topic: '',
-      hoursContact: Math.max(1, Math.round(Math.min(Number(dailyHourLimit) || 3, 3))),
+      hoursContact: 1,
       hoursIndependent: 0,
       hoursEvaluation: 0,
       isSaturdayCompensation: false,
       note: '',
     };
 
-    const updated = [...sessions, newSess].sort((a, b) => {
-      if (a.outcomeIndex !== b.outcomeIndex) return a.outcomeIndex - b.outcomeIndex;
-      return a.date.localeCompare(b.date);
-    });
+    const updated = [...sessions];
+    updated.splice(targetGlobalIdx + 1, 0, newSess);
     setSessions(updated);
+    setActiveSessionId(newId);
+  };
+
+  const handleAddSessionToOutcome = (outcomeIdx) => {
+    // თუ მომხმარებელს კურსორი / აქტიური სტრიქონი მონიშნული აქვს ამ სწავლის შედეგში:
+    const activeIdx = sessions.findIndex((s) => s.id === activeSessionId && s.outcomeIndex === outcomeIdx);
+    if (activeIdx !== -1) {
+      handleInsertSessionAfter(activeIdx);
+      return;
+    }
+
+    // თუ არა, ჩავამატოთ ამ სწავლის შედეგის ბოლო თემის ქვემოთ (და არა მთელი კალენდრის ბოლოში!)
+    const ocLastIdx = sessions
+      .map((s, idx) => ({ s, idx }))
+      .filter((item) => item.s.outcomeIndex === outcomeIdx)
+      .pop()?.idx;
+
+    if (ocLastIdx !== undefined) {
+      handleInsertSessionAfter(ocLastIdx);
+    } else {
+      const oc = outcomesConfig[outcomeIdx];
+      const newId = `sess_manual_${Date.now()}`;
+      const newSess = {
+        id: newId,
+        outcomeIndex: outcomeIdx,
+        outcomeNumber: oc.outcome_number,
+        outcomeName: oc.outcome_name,
+        date: startDate,
+        academicWeek: startAcademicWeek,
+        topic: '',
+        hoursContact: 1,
+        hoursIndependent: 0,
+        hoursEvaluation: 0,
+        isSaturdayCompensation: false,
+        note: '',
+      };
+      setSessions([...sessions, newSess]);
+      setActiveSessionId(newId);
+    }
   };
 
   const handleDeleteSession = (sessId) => {
@@ -2957,83 +2992,152 @@ export default function CalendarGenerator() {
                       </tr>
                     </thead>
                     <tbody>
-                      {ocSessions.map((sess, sIdx) => (
-                        <tr key={sess.id} style={{ borderBottom: '1px solid #f1f5f9', background: sess.isSaturdayCompensation ? '#fffbeb' : '#fff' }}>
-                          <td style={{ padding: '8px 10px' }}>
-                            <input
-                              type="date"
-                              value={sess.date}
-                              onChange={(e) => handleSessionChange(sess.id, 'date', e.target.value)}
-                              style={{ padding: '5px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12.5px' }}
-                            />
-                          </td>
-                          <td style={{ padding: '8px 10px', textAlign: 'center' }}>
-                            <input
-                              type="number"
-                              value={sess.academicWeek}
-                              onChange={(e) => handleSessionChange(sess.id, 'academicWeek', e.target.value)}
-                              style={{ width: '60px', padding: '5px', textAlign: 'center', borderRadius: '6px', border: '1px solid #cbd5e1' }}
-                            />
-                          </td>
-                          <td style={{ padding: '8px 10px' }}>
-                            <input
-                              type="text"
-                              value={sess.topic}
-                              onChange={(e) => handleSessionChange(sess.id, 'topic', e.target.value)}
-                              style={{ width: '100%', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-                            />
-                          </td>
-                          <td style={{ padding: '8px 10px', textAlign: 'center' }}>
-                            <input
-                              type="number"
-                              min="1"
-                              step="1"
-                              value={sess.hoursContact}
-                              onChange={(e) => handleSessionChange(sess.id, 'hoursContact', e.target.value)}
-                              style={{ width: '70px', padding: '6px', textAlign: 'center', fontWeight: 700, borderRadius: '6px', border: '1px solid #2563eb' }}
-                            />
-                          </td>
-                          <td style={{ padding: '8px 10px', textAlign: 'center' }}>
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
-                              {sIdx < ocSessions.length - 1 && (
-                                <button
-                                  type="button"
-                                  title="მომდევნო თემასთან გაერთიანება"
-                                  onClick={() => handleMergeWithNextSession(sess.globalIdx)}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    padding: '5px 8px',
-                                    borderRadius: '6px',
-                                    border: '1px solid #cbd5e1',
-                                    background: '#f8fafc',
-                                    fontSize: '11.5px',
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  <Merge size={12} /> გაერთიანება
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                title="სტრიქონის წაშლა"
-                                onClick={() => handleDeleteSession(sess.id)}
+                      {ocSessions.map((sess, sIdx) => {
+                        const isFocused = activeSessionId === sess.id;
+                        return (
+                          <tr
+                            key={sess.id}
+                            onClick={() => setActiveSessionId(sess.id)}
+                            style={{
+                              borderBottom: '1px solid #f1f5f9',
+                              background: isFocused ? '#eff6ff' : sess.isSaturdayCompensation ? '#fffbeb' : '#fff',
+                              transition: 'background 0.15s',
+                            }}
+                          >
+                            <td style={{ padding: '8px 10px' }}>
+                              <input
+                                type="date"
+                                value={sess.date}
+                                onFocus={() => setActiveSessionId(sess.id)}
+                                onChange={(e) => handleSessionChange(sess.id, 'date', e.target.value)}
                                 style={{
                                   padding: '5px 8px',
                                   borderRadius: '6px',
-                                  border: '1px solid #fecaca',
-                                  background: '#fef2f2',
-                                  color: '#dc2626',
-                                  cursor: 'pointer',
+                                  border: isFocused ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                                  fontSize: '12.5px',
                                 }}
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                              />
+                            </td>
+                            <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                              <input
+                                type="number"
+                                value={sess.academicWeek}
+                                onFocus={() => setActiveSessionId(sess.id)}
+                                onChange={(e) => handleSessionChange(sess.id, 'academicWeek', e.target.value)}
+                                style={{
+                                  width: '60px',
+                                  padding: '5px',
+                                  textAlign: 'center',
+                                  borderRadius: '6px',
+                                  border: isFocused ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '8px 10px' }}>
+                              <input
+                                type="text"
+                                value={sess.topic}
+                                placeholder="ჩაწერეთ თემა..."
+                                onFocus={() => setActiveSessionId(sess.id)}
+                                onChange={(e) => handleSessionChange(sess.id, 'topic', e.target.value)}
+                                style={{
+                                  width: '100%',
+                                  padding: '6px 10px',
+                                  borderRadius: '6px',
+                                  border: isFocused ? '2px solid #2563eb' : '1px solid #cbd5e1',
+                                  fontSize: '13px',
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                              <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                value={sess.hoursContact}
+                                onFocus={() => setActiveSessionId(sess.id)}
+                                onChange={(e) => handleSessionChange(sess.id, 'hoursContact', e.target.value)}
+                                style={{
+                                  width: '70px',
+                                  padding: '6px',
+                                  textAlign: 'center',
+                                  fontWeight: 700,
+                                  borderRadius: '6px',
+                                  border: isFocused ? '2px solid #2563eb' : '1px solid #2563eb',
+                                }}
+                              />
+                            </td>
+                            <td style={{ padding: '8px 10px', textAlign: 'center' }}>
+                              <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
+                                <button
+                                  type="button"
+                                  title="ამ სტრიქონის ქვემოთ ახალი თემის ჩამატება"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleInsertSessionAfter(sess.globalIdx);
+                                  }}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    padding: '5px 8px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #bfdbfe',
+                                    background: '#eff6ff',
+                                    color: '#1d4ed8',
+                                    fontSize: '11.5px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <Plus size={12} /> ქვემოთ
+                                </button>
+                                {sIdx < ocSessions.length - 1 && (
+                                  <button
+                                    type="button"
+                                    title="მომდევნო თემასთან გაერთიანება"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleMergeWithNextSession(sess.globalIdx);
+                                    }}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '4px',
+                                      padding: '5px 8px',
+                                      borderRadius: '6px',
+                                      border: '1px solid #cbd5e1',
+                                      background: '#f8fafc',
+                                      fontSize: '11.5px',
+                                      cursor: 'pointer',
+                                    }}
+                                  >
+                                    <Merge size={12} /> გაერთიანება
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  title="სტრიქონის წაშლა"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteSession(sess.id);
+                                  }}
+                                  style={{
+                                    padding: '5px 8px',
+                                    borderRadius: '6px',
+                                    border: '1px solid #fecaca',
+                                    background: '#fef2f2',
+                                    color: '#dc2626',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

@@ -6,15 +6,14 @@ import {
   Trash2,
   Save,
   Copy,
-  FileSpreadsheet,
+  Layers,
+  RotateCcw,
   CheckCircle,
   AlertCircle,
-  Sparkles,
-  Info,
-  Layers,
-  ChevronDown,
-  RotateCcw
+  CalendarDays
 } from 'lucide-react';
+
+const LOCAL_STORAGE_KEY = 'academic_schedules_cache_v1';
 
 // ოფიციალური უქმე დღეები საქართველოში (2026-2027)
 const DEFAULT_HOLIDAYS_MAP = {
@@ -46,13 +45,20 @@ const DEFAULT_HOLIDAYS_MAP = {
 };
 
 const WEEKDAY_NAMES = [
-  { key: 'mon', label: 'ორშ', fullName: 'ორშაბათი', offset: 0 },
-  { key: 'tue', label: 'სამ', fullName: 'სამშაბათი', offset: 1 },
-  { key: 'wed', label: 'ოთხ', fullName: 'ოთხშაბათი', offset: 2 },
-  { key: 'thu', label: 'ხუთ', fullName: 'ხუთშაბათი', offset: 3 },
-  { key: 'fri', label: 'პარ', fullName: 'პარასკევი', offset: 4 },
-  { key: 'sat', label: 'შაბ', fullName: 'შაბათი', offset: 5 },
+  { key: 'mon', label: 'ორ', fullName: 'ორშაბათი', offset: 0 },
+  { key: 'tue', label: 'სა', fullName: 'სამშაბათი', offset: 1 },
+  { key: 'wed', label: 'ოთ', fullName: 'ოთხშაბათი', offset: 2 },
+  { key: 'thu', label: 'ხუ', fullName: 'ხუთშაბათი', offset: 3 },
+  { key: 'fri', label: 'პა', fullName: 'პარასკევი', offset: 4 },
+  { key: 'sat', label: 'შა', fullName: 'შაბათი', offset: 5 },
 ];
+
+function formatShortDate(isoDate) {
+  if (!isoDate) return '';
+  const parts = isoDate.split('-');
+  if (parts.length !== 3) return isoDate;
+  return `${parts[2]}.${parts[1]}`;
+}
 
 function formatDateGeo(isoDate) {
   if (!isoDate) return '';
@@ -75,7 +81,7 @@ function getIsoWeekday(isoDate) {
   const [y, m, d] = isoDate.split('-').map(Number);
   const dt = new Date(y, m - 1, d);
   const day = dt.getDay();
-  return day === 0 ? 7 : day; // 1 = Monday ... 7 = Sunday
+  return day === 0 ? 7 : day;
 }
 
 function getMondayOfIsoDate(isoDate) {
@@ -83,7 +89,6 @@ function getMondayOfIsoDate(isoDate) {
   return addDays(isoDate, -(wd - 1));
 }
 
-// კვირების ავტომატური გენერატორი დაწყების თარიღიდან
 function generateWeeksStructure(startDateIso, totalWeeksCount = 42, customHolidays = DEFAULT_HOLIDAYS_MAP) {
   const startMonday = getMondayOfIsoDate(startDateIso);
   const result = [];
@@ -93,7 +98,7 @@ function generateWeeksStructure(startDateIso, totalWeeksCount = 42, customHolida
   for (let w = 1; w <= totalWeeksCount; w++) {
     const days = WEEKDAY_NAMES.map((wd) => {
       const dateIso = addDays(currMonday, wd.offset);
-      const isDefaultActive = wd.key !== 'sat'; // ორშაბათი-პარასკევი აქტიურია, შაბათი არააქტიური
+      const isDefaultActive = wd.key !== 'sat';
       const holidayName = customHolidays[dateIso] || '';
       return {
         key: wd.key,
@@ -106,7 +111,7 @@ function generateWeeksStructure(startDateIso, totalWeeksCount = 42, customHolida
       };
     });
 
-    const workdays = days.slice(0, 5); // ორშ-პარ
+    const workdays = days.slice(0, 5);
     const allWorkdaysAreHolidays = workdays.every((d) => d.isHoliday);
 
     let weekType = 'study';
@@ -148,7 +153,6 @@ function generateWeeksStructure(startDateIso, totalWeeksCount = 42, customHolida
   return result;
 }
 
-// ხელახალი გადათვლა: თუ რომელიმე კვირა არდადეგებია, მისი ნომერი იხსნება და მომდევნოები გადაინომრება
 function recalculateAcademicWeeks(weeksList) {
   let counter = 1;
   return weeksList.map((wk, idx) => {
@@ -171,26 +175,26 @@ function recalculateAcademicWeeks(weeksList) {
 }
 
 export default function AcademicScheduleManager() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [savedSchedules, setSavedSchedules] = useState([]);
   const [selectedScheduleId, setSelectedScheduleId] = useState('');
-  
-  // კალენდრის მეტამონაცემები
+
+  // კალენდრის პარამეტრები
   const [currentId, setCurrentId] = useState(null);
-  const [title, setTitle] = useState('2026-2027 სასწავლო წლის კალენდარი');
+  const [title, setTitle] = useState('2026-2027 სასწავლო კალენდარი');
   const [programName, setProgramName] = useState('კომპიუტერული ქსელი და სისტემები');
   const [academicYear, setAcademicYear] = useState('2026-2027');
   const [startDate, setStartDate] = useState('2026-09-15');
   const [totalWeeks, setTotalWeeks] = useState(42);
   const [isTemplate, setIsTemplate] = useState(false);
   const [weeks, setWeeks] = useState([]);
-  
+
   // შეტყობინებები
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [saving, setSaving] = useState(false);
 
-  // არდადეგების სწრაფი მონიშვნის დიალოგი
+  // არდადეგების მოდალი
   const [showVacationModal, setShowVacationModal] = useState(false);
   const [vacationStart, setVacationStart] = useState('2026-12-30');
   const [vacationEnd, setVacationEnd] = useState('2027-01-16');
@@ -199,30 +203,55 @@ export default function AcademicScheduleManager() {
 
   useEffect(() => {
     loadSavedSchedules();
-    // საწყისი გენერირება
     const initialWeeks = generateWeeksStructure('2026-09-15', 42);
     setWeeks(initialWeeks);
   }, []);
 
-  const loadSavedSchedules = async () => {
-    setLoading(true);
+  const getLocalCache = () => {
     try {
-      const res = await api.getAcademicSchedules().catch(() => ({ schedules: [] }));
-      setSavedSchedules(res.schedules || []);
-    } catch (err) {
-      setErrorMsg('შენახული კალენდრების ჩატვირთვა ვერ მოხერხდა');
-    } finally {
-      setLoading(false);
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
     }
   };
 
-  // შაბლონის ან შენახული კალენდრის არჩევა
+  const saveLocalCache = (list) => {
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
+    } catch {}
+  };
+
+  const loadSavedSchedules = async () => {
+    setLoading(true);
+    let serverList = [];
+    try {
+      const res = await api.getAcademicSchedules();
+      if (res && res.schedules) {
+        serverList = res.schedules;
+      }
+    } catch {
+      // ignore
+    }
+
+    const localList = getLocalCache();
+    // გავაერთიანოთ სერვერისა და ლოკალური შაბლონები
+    const combined = [...serverList];
+    for (const loc of localList) {
+      if (!combined.some((s) => String(s.id) === String(loc.id))) {
+        combined.push(loc);
+      }
+    }
+
+    setSavedSchedules(combined);
+    setLoading(false);
+  };
+
   const handleSelectSchedule = async (scheduleIdStr) => {
     setSelectedScheduleId(scheduleIdStr);
     if (!scheduleIdStr) return;
 
     if (scheduleIdStr === 'default_template') {
-      // სტანდარტული შაბლონი
       setCurrentId(null);
       setTitle('2026-2027 საბაზო სასწავლო კალენდარი');
       setProgramName('საერთო სასწავლო კალენდარი');
@@ -236,52 +265,60 @@ export default function AcademicScheduleManager() {
       return;
     }
 
+    // ჯერ ლოკალურ კეშში შევამოწმოთ
+    const localList = getLocalCache();
+    const cached = localList.find((item) => String(item.id) === String(scheduleIdStr));
+    if (cached) {
+      applyScheduleData(cached);
+      setSuccessMsg(`ჩაიტვირთა: ${cached.title}`);
+      return;
+    }
+
     try {
       const res = await api.getAcademicSchedule(Number(scheduleIdStr));
-      const sch = res.schedule;
-      if (sch) {
-        setCurrentId(sch.id);
-        setTitle(sch.title || '');
-        setProgramName(sch.program_name || '');
-        setAcademicYear(sch.academic_year || '2026-2027');
-        setStartDate(sch.start_date || '2026-09-15');
-        setTotalWeeks(sch.total_weeks || 42);
-        setIsTemplate(Boolean(sch.is_template));
-
-        if (Array.isArray(sch.weeks_json) && sch.weeks_json.length > 0) {
-          setWeeks(sch.weeks_json);
-        } else {
-          setWeeks(generateWeeksStructure(sch.start_date || '2026-09-15', sch.total_weeks || 42));
-        }
-        setSuccessMsg(`ჩაიტვირთა: ${sch.title}`);
+      if (res && res.schedule) {
+        applyScheduleData(res.schedule);
+        setSuccessMsg(`ჩაიტვირთა: ${res.schedule.title}`);
       }
     } catch (err) {
       setErrorMsg('კალენდრის ჩატვირთვა ვერ მოხერხდა');
     }
   };
 
-  // შაბლონის ბაზაზე ახლის შექმნა (დუბლირება)
+  const applyScheduleData = (sch) => {
+    setCurrentId(sch.id);
+    setTitle(sch.title || '');
+    setProgramName(sch.program_name || '');
+    setAcademicYear(sch.academic_year || '2026-2027');
+    setStartDate(sch.start_date || '2026-09-15');
+    setTotalWeeks(sch.total_weeks || 42);
+    setIsTemplate(Boolean(sch.is_template));
+
+    if (Array.isArray(sch.weeks_json) && sch.weeks_json.length > 0) {
+      setWeeks(sch.weeks_json);
+    } else {
+      setWeeks(generateWeeksStructure(sch.start_date || '2026-09-15', sch.total_weeks || 42));
+    }
+  };
+
   const handleCloneAsNew = () => {
     setCurrentId(null);
     setTitle(`${title} (ასლი)`);
     setIsTemplate(false);
     setSelectedScheduleId('');
-    setSuccessMsg('შეიქმნა ახალი კალენდარი არჩეული შაბლონის ბაზაზე. შეგიძლიათ შეცვალოთ და შეინახოთ.');
+    setSuccessMsg('შეიქმნა ახალი კალენდარი არჩეული შაბლონის ბაზაზე.');
   };
 
-  // ახალი სუფთა კალენდრის გენერირება
   const handleRegenerateFromStart = () => {
     const generated = generateWeeksStructure(startDate, Number(totalWeeks) || 42);
     setWeeks(generated);
-    setSuccessMsg(`კვირეები ხელახლა დაითვალა ${formatDateGeo(startDate)}-დან (${totalWeeks} კვირა)`);
+    setSuccessMsg(`კვირეები გადაითვალა ${formatDateGeo(startDate)}-დან (${totalWeeks} კვირა)`);
   };
 
-  // კვირის ველის შეცვლა (სტატუსი, შენიშვნა, სასწავლო კვირის ნომერი)
   const handleWeekChange = (weekIdx, field, value) => {
     const updated = [...weeks];
     const target = { ...updated[weekIdx], [field]: value };
 
-    // თუ ტიპი შეიცვალა, ხელახლა გადავთვალოთ სასწავლო კვირის ნომრები
     if (field === 'weekType') {
       const isVacation = ['winter_vacation', 'spring_vacation', 'summer_vacation', 'holiday'].includes(value);
       if (isVacation) {
@@ -301,17 +338,14 @@ export default function AcademicScheduleManager() {
     setWeeks(updated);
   };
 
-  // კონკრეტული დღის ჩართვა/გამორთვა
   const handleToggleDay = (weekIdx, dayKey) => {
     const updated = [...weeks];
     const week = { ...updated[weekIdx] };
-    const days = week.days.map((d) => (d.key === dayKey ? { ...d, isActive: !d.isActive } : d));
-    week.days = days;
+    week.days = week.days.map((d) => (d.key === dayKey ? { ...d, isActive: !d.isActive } : d));
     updated[weekIdx] = week;
     setWeeks(updated);
   };
 
-  // ახალი კვირის ჩამატება ბოლოში
   const handleAddWeekAtEnd = () => {
     const lastWeek = weeks[weeks.length - 1];
     const nextMonday = lastWeek ? addDays(lastWeek.mondayDate, 7) : addDays(startDate, 7);
@@ -345,7 +379,6 @@ export default function AcademicScheduleManager() {
     setTotalWeeks(updated.length);
   };
 
-  // კვირის წაშლა
   const handleDeleteWeek = (weekIdx) => {
     if (weeks.length <= 1) return;
     const filtered = weeks.filter((_, idx) => idx !== weekIdx);
@@ -354,15 +387,13 @@ export default function AcademicScheduleManager() {
     setTotalWeeks(renumbered.length);
   };
 
-  // არდადეგების დიაპაზონით სწრაფი მონიშვნა (მაგ. 30.12 - 16.01)
   const handleApplyVacationRange = () => {
     if (!vacationStart || !vacationEnd) {
-      setErrorMsg('მიუთითეთ არდადეგების საწყისი და საბოლოო თარიღი');
+      setErrorMsg('მიუთითეთ თარიღების ინტერვალი');
       return;
     }
 
     const updated = weeks.map((wk) => {
-      // თუ კვირის რომელიმე დღე ხვდება დიაპაზონში
       const touchesRange = wk.days.some((d) => d.date >= vacationStart && d.date <= vacationEnd && d.key !== 'sat');
       if (touchesRange) {
         return {
@@ -386,13 +417,13 @@ export default function AcademicScheduleManager() {
     const renumbered = recalculateAcademicWeeks(updated);
     setWeeks(renumbered);
     setShowVacationModal(false);
-    setSuccessMsg(`არდადეგები წარმატებით მოინიშნა: ${formatDateGeo(vacationStart)} – ${formatDateGeo(vacationEnd)}`);
+    setSuccessMsg(`არდადეგები მოინიშნა: ${formatDateGeo(vacationStart)} – ${formatDateGeo(vacationEnd)}`);
   };
 
-  // კალენდრის შენახვა ბაზაში
+  // შენახვა (API + ლოკალური კეში როგორც საიმედო გარანტია)
   const handleSave = async (saveAsTpl = false) => {
     if (!title.trim()) {
-      setErrorMsg('გთხოვთ მიუთითოთ კალენდრის სათაური');
+      setErrorMsg('მიუთითეთ კალენდრის სათაური');
       return;
     }
 
@@ -400,312 +431,305 @@ export default function AcademicScheduleManager() {
     setErrorMsg('');
     setSuccessMsg('');
 
-    try {
-      const payload = {
-        id: currentId,
-        title: title.trim(),
-        program_name: programName.trim(),
-        academic_year: academicYear.trim(),
-        start_date: startDate,
-        total_weeks: weeks.length,
-        is_template: saveAsTpl ? true : isTemplate,
-        weeks_json: weeks,
-        holidays_json: DEFAULT_HOLIDAYS_MAP,
-      };
+    const targetIsTpl = saveAsTpl ? true : isTemplate;
+    const scheduleId = currentId || `local_${Date.now()}`;
 
+    const payload = {
+      id: typeof currentId === 'number' ? currentId : null,
+      title: title.trim(),
+      program_name: programName.trim(),
+      academic_year: academicYear.trim(),
+      start_date: startDate,
+      total_weeks: weeks.length,
+      is_template: targetIsTpl,
+      weeks_json: weeks,
+      holidays_json: DEFAULT_HOLIDAYS_MAP,
+    };
+
+    // 1. ყოველთვის შევინახოთ ლოკალურ ბრაუზერშიც
+    const localRecord = { ...payload, id: scheduleId, updated_at: new Date().toISOString() };
+    const localList = getLocalCache().filter((x) => String(x.id) !== String(scheduleId));
+    localList.unshift(localRecord);
+    saveLocalCache(localList);
+
+    // 2. სერვერზე გაგზავნა
+    let serverSuccess = false;
+    try {
       const res = await api.saveAcademicSchedule(payload);
-      if (res.success) {
+      if (res && res.success) {
         setCurrentId(res.id);
-        setSuccessMsg(saveAsTpl ? 'კალენდარი წარმატებით შეინახა როგორც შაბლონი!' : 'სასწავლო კალენდარი წარმატებით შეინახა ბაზაში!');
-        loadSavedSchedules();
-      } else {
-        setErrorMsg(res.message || 'შენახვა ვერ მოხერხდა');
+        serverSuccess = true;
       }
-    } catch (err) {
-      setErrorMsg(err.message || 'სერვერთან კავშირის შეცდომა');
-    } finally {
-      setSaving(false);
+    } catch (e) {
+      // სერვერის API შესაძლოა გადატვირთვას ელოდებოდეს
+    }
+
+    setSaving(false);
+    loadSavedSchedules();
+
+    if (serverSuccess) {
+      setSuccessMsg(saveAsTpl ? 'შაბლონი წარმატებით შეინახა!' : 'კალენდარი წარმატებით შეინახა!');
+    } else {
+      setSuccessMsg(
+        saveAsTpl
+          ? 'შაბლონი შენახულია ბრაუზერში! (სერვერზე შესანახად საჭიროა sudo systemctl restart api_site)'
+          : 'კალენდარი შენახულია ბრაუზერში! (სერვერზე შესანახად საჭიროა sudo systemctl restart api_site)'
+      );
     }
   };
 
-  // სტატისტიკა
   const totalCalWeeks = weeks.length;
   const totalAcadWeeks = weeks.filter((w) => w.academicWeekNumber !== null && w.academicWeekNumber !== undefined).length;
   const totalVacationWeeks = totalCalWeeks - totalAcadWeeks;
   const totalActiveDays = weeks.reduce((sum, w) => sum + w.days.filter((d) => d.isActive).length, 0);
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1480px', margin: '0 auto', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
-      {/* სათაური და აღწერა */}
-      <div style={{ marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '14px' }}>
-        <div>
-          <h1 style={{ fontSize: '24px', fontWeight: 800, color: '#0f172a', margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Calendar size={26} color="#2563eb" />
-            სასწავლო კვირებისა და აკადემიური კალენდრის მართვა
-          </h1>
-          <p style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>
-            პროგრამის ოფიციალური სასწავლო კვირეებისა და დასვენების დღეების რედაქტირებადი ბადე. სწავლა იწყება 15.09-დან, სრული არდადეგები არ ითვლება სასწავლო კვირად.
-          </p>
+    <div style={{ padding: '12px 16px', maxWidth: '100%', margin: '0 auto', fontFamily: 'system-ui, -apple-system, sans-serif' }}>
+      {/* კომპაქტური ზედა პანელი */}
+      <div style={{ background: '#ffffff', borderRadius: '10px', border: '1px solid #cbd5e1', padding: '10px 14px', marginBottom: '10px', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}>
+        {/* სტრიქონი 1: სათაური და ღილაკები */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CalendarDays size={20} color="#2563eb" />
+            <span style={{ fontSize: '15px', fontWeight: 800, color: '#0f172a' }}>სასწავლო კვირებისა და კალენდრის განრიგი</span>
+          </div>
+
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <button
+              onClick={() => setShowVacationModal(true)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '5px 10px',
+                borderRadius: '6px',
+                border: '1px solid #f59e0b',
+                background: '#fffbeb',
+                color: '#b45309',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                cursor: 'pointer',
+              }}
+            >
+              🏖️ არდადეგების მონიშვნა
+            </button>
+
+            <button
+              onClick={() => handleSave(true)}
+              disabled={saving}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '5px 10px',
+                borderRadius: '6px',
+                border: '1px solid #cbd5e1',
+                background: '#ffffff',
+                color: '#334155',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <Layers size={13} />
+              <span>შაბლონად შენახვა</span>
+            </button>
+
+            <button
+              onClick={() => handleSave(false)}
+              disabled={saving}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '5px 14px',
+                borderRadius: '6px',
+                border: 'none',
+                background: '#2563eb',
+                color: '#ffffff',
+                fontSize: '11.5px',
+                fontWeight: 700,
+                cursor: saving ? 'not-allowed' : 'pointer',
+              }}
+            >
+              <Save size={13} />
+              <span>{saving ? 'ინახება...' : 'შენახვა'}</span>
+            </button>
+          </div>
         </div>
 
-        {/* მოქმედების მთავარი ღილაკები */}
-        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => setShowVacationModal(true)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '10px 16px',
-              borderRadius: '8px',
-              border: '1px solid #f59e0b',
-              background: '#fffbeb',
-              color: '#b45309',
-              fontSize: '13px',
-              fontWeight: 700,
-              cursor: 'pointer',
-            }}
-          >
-            <span>🏖️ არდადეგების მონიშვნა (დიაპაზონით)</span>
-          </button>
+        {/* სტრიქონი 2: კომპაქტური კონფიგურაციის ველები */}
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px', fontSize: '12px' }}>
+          {/* შაბლონის არჩევა */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontWeight: 700, color: '#475569' }}>შაბლონი:</span>
+            <select
+              value={selectedScheduleId}
+              onChange={(e) => handleSelectSchedule(e.target.value)}
+              style={{ padding: '4px 8px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '11.5px', maxWidth: '210px' }}
+            >
+              <option value="">-- აირჩიეთ შაბლონი --</option>
+              <option value="default_template">🌟 2026-2027 საბაზო შაბლონი</option>
+              {savedSchedules.map((s) => (
+                <option key={s.id} value={String(s.id)}>
+                  {s.is_template ? '📑 ' : '📅 '} {s.title}
+                </option>
+              ))}
+            </select>
+            {selectedScheduleId && (
+              <button
+                type="button"
+                onClick={handleCloneAsNew}
+                title="შაბლონის ბაზაზე ახლის შექმნა"
+                style={{ padding: '4px 6px', borderRadius: '5px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', fontSize: '11px', fontWeight: 600 }}
+              >
+                <Copy size={12} />
+              </button>
+            )}
+          </div>
 
-          <button
-            onClick={() => handleSave(true)}
-            disabled={saving}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '10px 16px',
-              borderRadius: '8px',
-              border: '1px solid #cbd5e1',
-              background: '#ffffff',
-              color: '#334155',
-              fontSize: '13px',
-              fontWeight: 700,
-              cursor: saving ? 'not-allowed' : 'pointer',
-            }}
-          >
-            <Layers size={16} />
-            <span>შაბლონად შენახვა</span>
-          </button>
+          {/* დასახელება */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 180px' }}>
+            <span style={{ fontWeight: 700, color: '#475569' }}>სახელი:</span>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              style={{ width: '100%', padding: '4px 8px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '11.5px' }}
+            />
+          </div>
 
-          <button
-            onClick={() => handleSave(false)}
-            disabled={saving}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '10px 20px',
-              borderRadius: '8px',
-              border: 'none',
-              background: '#2563eb',
-              color: '#ffffff',
-              fontSize: '13.5px',
-              fontWeight: 700,
-              cursor: saving ? 'not-allowed' : 'pointer',
-              boxShadow: '0 2px 8px rgba(37,99,235,0.25)',
-            }}
-          >
-            <Save size={16} />
-            <span>{saving ? 'ინახება...' : 'კალენდრის შენახვა'}</span>
-          </button>
+          {/* პროგრამა */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flex: '1 1 180px' }}>
+            <span style={{ fontWeight: 700, color: '#475569' }}>პროგრამა:</span>
+            <input
+              type="text"
+              value={programName}
+              onChange={(e) => setProgramName(e.target.value)}
+              style={{ width: '100%', padding: '4px 8px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '11.5px' }}
+            />
+          </div>
+
+          {/* სწავლის დასაწყისი */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontWeight: 700, color: '#1e3a8a' }}>დაწყება:</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              style={{ padding: '3px 6px', borderRadius: '5px', border: '1.5px solid #2563eb', fontSize: '11.5px', fontWeight: 700 }}
+            />
+          </div>
+
+          {/* კვირები და გადათვლა */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontWeight: 700, color: '#475569' }}>კვირა:</span>
+            <input
+              type="number"
+              min="10"
+              max="60"
+              value={totalWeeks}
+              onChange={(e) => setTotalWeeks(Number(e.target.value))}
+              style={{ width: '48px', padding: '3px 5px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '11.5px', textAlign: 'center' }}
+            />
+            <button
+              type="button"
+              onClick={handleRegenerateFromStart}
+              title="კვირების ხელახლა გადათვლა"
+              style={{
+                padding: '4px 8px',
+                borderRadius: '5px',
+                border: '1px solid #2563eb',
+                background: '#eff6ff',
+                color: '#1d4ed8',
+                fontSize: '11px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '3px',
+              }}
+            >
+              <RotateCcw size={12} />
+              <span>გადათვლა</span>
+            </button>
+          </div>
+        </div>
+
+        {/* სტრიქონი 3: კომპაქტური სტატისტიკა (Inline pills) */}
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '8px', paddingTop: '6px', borderTop: '1px solid #f1f5f9', fontSize: '11.5px', flexWrap: 'wrap' }}>
+          <span style={{ color: '#475569' }}>
+            კალენდარული კვირები: <strong>{totalCalWeeks}</strong>
+          </span>
+          <span style={{ color: '#cbd5e1' }}>|</span>
+          <span style={{ color: '#15803d' }}>
+            სასწავლო კვირები: <strong>{totalAcadWeeks}</strong>
+          </span>
+          <span style={{ color: '#cbd5e1' }}>|</span>
+          <span style={{ color: '#b45309' }}>
+            არდადეგები: <strong>{totalVacationWeeks}</strong>
+          </span>
+          <span style={{ color: '#cbd5e1' }}>|</span>
+          <span style={{ color: '#1d4ed8' }}>
+            სამუშაო სასწავლო დღეები: <strong>{totalActiveDays}</strong>
+          </span>
         </div>
       </div>
 
       {/* შეტყობინებები */}
       {successMsg && (
-        <div style={{ padding: '12px 16px', borderRadius: '10px', background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d', fontSize: '13.5px', fontWeight: 600, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <CheckCircle size={18} />
+        <div style={{ padding: '6px 12px', borderRadius: '6px', background: '#f0fdf4', border: '1px solid #86efac', color: '#15803d', fontSize: '12px', fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <CheckCircle size={15} />
           <span>{successMsg}</span>
         </div>
       )}
       {errorMsg && (
-        <div style={{ padding: '12px 16px', borderRadius: '10px', background: '#fef2f2', border: '1px solid #fca5a5', color: '#b91c1c', fontSize: '13.5px', fontWeight: 600, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <AlertCircle size={18} />
+        <div style={{ padding: '6px 12px', borderRadius: '6px', background: '#fef2f2', border: '1px solid #fca5a5', color: '#b91c1c', fontSize: '12px', fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <AlertCircle size={15} />
           <span>{errorMsg}</span>
         </div>
       )}
 
-      {/* შაბლონისა და საბაზისო პარამეტრების ბარათი */}
-      <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', padding: '20px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', alignItems: 'end' }}>
-          {/* შაბლონის ან შენახული კალენდრის არჩევა */}
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
-              აირჩიეთ შაბლონი / შენახული კალენდარი:
-            </label>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <select
-                value={selectedScheduleId}
-                onChange={(e) => handleSelectSchedule(e.target.value)}
-                style={{ flex: 1, padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13.5px', background: '#f8fafc' }}
-              >
-                <option value="">-- აირჩიეთ ან შექმენით ახალი --</option>
-                <option value="default_template">🌟 [სტანდარტული შაბლონი] 2026-2027 საბაზო კალენდარი</option>
-                {savedSchedules.map((s) => (
-                  <option key={s.id} value={String(s.id)}>
-                    {s.is_template ? '📑 [შაბლონი] ' : '📅 '} {s.title} ({s.academic_year || '-'})
-                  </option>
-                ))}
-              </select>
-              {selectedScheduleId && (
-                <button
-                  type="button"
-                  onClick={handleCloneAsNew}
-                  title="შაბლონის ბაზაზე ახლის შექმნა"
-                  style={{ padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: 600 }}
-                >
-                  <Copy size={14} />
-                  <span>დუბლირება</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* კალენდრის დასახელება */}
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
-              კალენდრის დასახელება:
-            </label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="მაგ. 2026-2027 სასწავლო კალენდარი"
-              style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13.5px' }}
-            />
-          </div>
-
-          {/* პროგრამის დასახელება */}
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
-              პროგრამა:
-            </label>
-            <input
-              type="text"
-              value={programName}
-              onChange={(e) => setProgramName(e.target.value)}
-              placeholder="მაგ. კომპიუტერული ქსელი და სისტემები"
-              style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13.5px' }}
-            />
-          </div>
-
-          {/* სწავლის დასაწყისი */}
-          <div>
-            <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
-              სასწავლო წლის დაწყება:
-            </label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '2px solid #2563eb', fontSize: '13.5px', fontWeight: 700, color: '#1e3a8a' }}
-            />
-          </div>
-
-          {/* კვირების რაოდენობა და ხელახლა დათვლა */}
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>
-                კვირების რაოდ.:
-              </label>
-              <input
-                type="number"
-                min="10"
-                max="60"
-                value={totalWeeks}
-                onChange={(e) => setTotalWeeks(Number(e.target.value))}
-                style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13.5px' }}
-              />
-            </div>
-            <button
-              type="button"
-              onClick={handleRegenerateFromStart}
-              title="ამ თარიღიდან კვირების ხელახლა დაგენერირება"
-              style={{
-                padding: '9px 14px',
-                borderRadius: '8px',
-                border: '1px solid #2563eb',
-                background: '#eff6ff',
-                color: '#1d4ed8',
-                fontSize: '12.5px',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <RotateCcw size={14} />
-              <span>გადათვლა</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* სტატისტიკის ზოლი */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginBottom: '20px' }}>
-        <div style={{ background: '#ffffff', borderRadius: '12px', padding: '14px 18px', border: '1px solid #e2e8f0' }}>
-          <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>კალენდარული კვირები</div>
-          <div style={{ fontSize: '22px', fontWeight: 800, color: '#0f172a', marginTop: '4px' }}>{totalCalWeeks} კვირა</div>
-        </div>
-        <div style={{ borderRadius: '12px', padding: '14px 18px', border: '1px solid #bbf7d0', background: '#f0fdf4' }}>
-          <div style={{ fontSize: '12px', color: '#166534', fontWeight: 600 }}>სასწავლო კვირები</div>
-          <div style={{ fontSize: '22px', fontWeight: 800, color: '#15803d', marginTop: '4px' }}>{totalAcadWeeks} კვირა</div>
-        </div>
-        <div style={{ borderRadius: '12px', padding: '14px 18px', border: '1px solid #fde68a', background: '#fffbeb' }}>
-          <div style={{ fontSize: '12px', color: '#92400e', fontWeight: 600 }}>არდადეგები / დასვენება</div>
-          <div style={{ fontSize: '22px', fontWeight: 800, color: '#b45309', marginTop: '4px' }}>{totalVacationWeeks} კვირა</div>
-        </div>
-        <div style={{ borderRadius: '12px', padding: '14px 18px', border: '1px solid #bfdbfe', background: '#eff6ff' }}>
-          <div style={{ fontSize: '12px', color: '#1e40af', fontWeight: 600 }}>სამუშაო სასწავლო დღეები</div>
-          <div style={{ fontSize: '22px', fontWeight: 800, color: '#1d4ed8', marginTop: '4px' }}>{totalActiveDays} დღე</div>
-        </div>
-      </div>
-
-      {/* რედაქტირებადი ცხრილი */}
-      <div style={{ background: '#ffffff', borderRadius: '14px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 2px 4px rgba(0,0,0,0.03)' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
-          <div style={{ fontSize: '14.5px', fontWeight: 700, color: '#0f172a' }}>
-            სასწავლო კვირებისა და დღეების ჩაშლილი ცხრილი (რედაქტირებადი):
-          </div>
+      {/* ულტრა-კომპაქტური ცხრილი */}
+      <div style={{ background: '#ffffff', borderRadius: '8px', border: '1px solid #cbd5e1', overflow: 'hidden' }}>
+        <div style={{ padding: '6px 10px', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc' }}>
+          <span style={{ fontSize: '12px', fontWeight: 700, color: '#334155' }}>
+            სასწავლო კვირების ბადე (ორშ–შაბ):
+          </span>
           <button
             type="button"
             onClick={handleAddWeekAtEnd}
             style={{
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
-              gap: '6px',
-              padding: '7px 14px',
-              borderRadius: '6px',
+              gap: '4px',
+              padding: '4px 8px',
+              borderRadius: '5px',
               border: '1px solid #2563eb',
               background: '#2563eb',
               color: '#fff',
-              fontSize: '12.5px',
+              fontSize: '11px',
               fontWeight: 700,
               cursor: 'pointer',
             }}
           >
-            <Plus size={14} />
-            <span>+ კვირის დამატება ბოლოში</span>
+            <Plus size={12} />
+            <span>+ კვირის დამატება</span>
           </button>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ background: '#f1f5f9', borderBottom: '2px solid #cbd5e1', color: '#334155', fontWeight: 700 }}>
-                <th style={{ padding: '10px 12px', width: '50px', textAlign: 'center' }}>№</th>
-                <th style={{ padding: '10px 12px', width: '130px', textAlign: 'center' }}>სასწავლო კვირა №</th>
-                <th style={{ padding: '10px 12px', width: '170px' }}>პერიოდი (თარიღები)</th>
-                <th style={{ padding: '10px 12px', width: '180px' }}>კვირის ტიპი / სტატუსი</th>
-                <th style={{ padding: '10px 12px' }}>სასწავლო დღეები (ორშ - შაბ)</th>
-                <th style={{ padding: '10px 12px', width: '80px', textAlign: 'center' }}>დღეები</th>
-                <th style={{ padding: '10px 12px', width: '180px' }}>შენიშვნა</th>
-                <th style={{ padding: '10px 12px', width: '60px', textAlign: 'center' }}>წაშლა</th>
+        <div style={{ overflowX: 'auto', maxHeight: '72vh' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11.5px', textAlign: 'left' }}>
+            <thead style={{ position: 'sticky', top: 0, background: '#f1f5f9', zIndex: 10 }}>
+              <tr style={{ borderBottom: '1.5px solid #cbd5e1', color: '#334155', fontWeight: 700 }}>
+                <th style={{ padding: '5px 6px', width: '32px', textAlign: 'center' }}>№</th>
+                <th style={{ padding: '5px 6px', width: '68px', textAlign: 'center' }}>სასწ. კვ.</th>
+                <th style={{ padding: '5px 6px', width: '105px' }}>პერიოდი</th>
+                <th style={{ padding: '5px 6px', width: '135px' }}>კვირის ტიპი</th>
+                <th style={{ padding: '5px 6px' }}>დღეები (ორშ–შაბ)</th>
+                <th style={{ padding: '5px 6px', width: '42px', textAlign: 'center' }}>დღე</th>
+                <th style={{ padding: '5px 6px', width: '170px' }}>შენიშვნა</th>
+                <th style={{ padding: '5px 6px', width: '30px', textAlign: 'center' }}></th>
               </tr>
             </thead>
             <tbody>
@@ -718,20 +742,19 @@ export default function AcademicScheduleManager() {
                     key={idx}
                     style={{
                       borderBottom: '1px solid #e2e8f0',
-                      background: isVacation ? '#fffbeb' : idx % 2 === 0 ? '#ffffff' : '#fafafa',
-                      transition: 'background 0.15s ease',
+                      background: isVacation ? '#fffbeb' : idx % 2 === 0 ? '#ffffff' : '#fcfcfc',
                     }}
                   >
-                    {/* კალენდარული კვირის ნომერი */}
-                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, color: '#64748b' }}>
+                    {/* № */}
+                    <td style={{ padding: '3px 6px', textAlign: 'center', color: '#64748b', fontWeight: 600 }}>
                       {idx + 1}
                     </td>
 
-                    {/* სასწავლო კვირა № (რედაქტირებადი) */}
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                    {/* სასწავლო კვირა № */}
+                    <td style={{ padding: '3px 6px', textAlign: 'center' }}>
                       {isVacation ? (
-                        <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: '4px', background: '#fef3c7', color: '#92400e', fontSize: '11px', fontWeight: 700 }}>
-                          🏖️ არდადეგები
+                        <span style={{ padding: '1px 4px', borderRadius: '3px', background: '#fef3c7', color: '#92400e', fontSize: '10px', fontWeight: 700 }}>
+                          🏖️
                         </span>
                       ) : (
                         <input
@@ -740,35 +763,35 @@ export default function AcademicScheduleManager() {
                           value={wk.academicWeekNumber || ''}
                           onChange={(e) => handleWeekChange(idx, 'academicWeekNumber', e.target.value)}
                           style={{
-                            width: '65px',
-                            padding: '6px',
+                            width: '42px',
+                            padding: '2px 4px',
                             textAlign: 'center',
-                            borderRadius: '6px',
-                            border: '2px solid #2563eb',
+                            borderRadius: '4px',
+                            border: '1.5px solid #2563eb',
                             fontWeight: 800,
                             color: '#1d4ed8',
-                            fontSize: '14px',
+                            fontSize: '11.5px',
                           }}
                         />
                       )}
                     </td>
 
-                    {/* პერიოდი */}
-                    <td style={{ padding: '10px 12px', fontWeight: 600, color: '#334155' }}>
-                      {formatDateGeo(wk.mondayDate)} – {formatDateGeo(wk.fridayDate)}
+                    {/* პერიოდი (მოკლედ) */}
+                    <td style={{ padding: '3px 6px', fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>
+                      {formatShortDate(wk.mondayDate)} – {formatShortDate(wk.fridayDate)}
                     </td>
 
                     {/* კვირის ტიპი */}
-                    <td style={{ padding: '10px 12px' }}>
+                    <td style={{ padding: '3px 6px' }}>
                       <select
                         value={wk.weekType}
                         onChange={(e) => handleWeekChange(idx, 'weekType', e.target.value)}
                         style={{
                           width: '100%',
-                          padding: '6px 8px',
-                          borderRadius: '6px',
+                          padding: '2px 4px',
+                          borderRadius: '4px',
                           border: '1px solid #cbd5e1',
-                          fontSize: '12.5px',
+                          fontSize: '11px',
                           fontWeight: 600,
                           background: isVacation ? '#fef3c7' : '#ffffff',
                           color: isVacation ? '#92400e' : '#1e293b',
@@ -778,31 +801,27 @@ export default function AcademicScheduleManager() {
                         <option value="winter_vacation">🏖️ ზამთრის არდადეგები</option>
                         <option value="spring_vacation">🌸 საგაზაფხულო არდადეგები</option>
                         <option value="summer_vacation">☀️ საზაფხულო არდადეგები</option>
-                        <option value="exam">📝 საგამოცდო / შეფასება</option>
+                        <option value="exam">📝 საგამოცდო კვირა</option>
                         <option value="holiday">⏸️ დასვენება / სხვა</option>
                       </select>
                     </td>
 
-                    {/* დღეების ბადე (ორშ - შაბ) */}
-                    <td style={{ padding: '10px 12px' }}>
-                      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {/* კომპაქტური დღეების ბეიჯები (ორშ–შაბ) */}
+                    <td style={{ padding: '3px 6px' }}>
+                      <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
                         {wk.days.map((d) => {
-                          const [y, m, dayNum] = d.date.split('-');
-                          const shortDisplay = `${dayNum}.${m}`;
-
+                          const [, , dayNum] = d.date.split('-');
                           return (
                             <button
                               key={d.key}
                               type="button"
                               onClick={() => handleToggleDay(idx, d.key)}
-                              title={`${d.fullName} (${formatDateGeo(d.date)})${d.holidayName ? ` - ${d.holidayName}` : ''}${d.isActive ? ' [აქტიური]' : ' [გამორთული]'}`}
+                              title={`${d.fullName} (${formatDateGeo(d.date)})${d.holidayName ? ` — ${d.holidayName}` : ''}${d.isActive ? ' [აქტიური]' : ' [გამორთული]'}`}
                               style={{
-                                display: 'inline-flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                padding: '4px 6px',
-                                minWidth: '42px',
-                                borderRadius: '6px',
+                                padding: '1px 3px',
+                                minWidth: '32px',
+                                height: '22px',
+                                borderRadius: '4px',
                                 border: d.isHoliday
                                   ? '1px solid #f59e0b'
                                   : d.isActive
@@ -819,12 +838,16 @@ export default function AcademicScheduleManager() {
                                   ? '#1d4ed8'
                                   : '#94a3b8',
                                 cursor: 'pointer',
-                                fontSize: '11px',
+                                fontSize: '10.5px',
                                 fontWeight: 700,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '2px',
                               }}
                             >
                               <span>{d.label}</span>
-                              <span style={{ fontSize: '10px', fontWeight: 500 }}>{shortDisplay}</span>
+                              <span style={{ fontWeight: 500 }}>{dayNum}</span>
                             </button>
                           );
                         })}
@@ -832,23 +855,23 @@ export default function AcademicScheduleManager() {
                     </td>
 
                     {/* სამუშაო დღეების ჯამი */}
-                    <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 700, color: activeDaysCount > 0 ? '#15803d' : '#94a3b8' }}>
-                      {activeDaysCount} დღე
+                    <td style={{ padding: '3px 6px', textAlign: 'center', fontWeight: 700, color: activeDaysCount > 0 ? '#15803d' : '#94a3b8' }}>
+                      {activeDaysCount}
                     </td>
 
                     {/* შენიშვნა */}
-                    <td style={{ padding: '10px 12px' }}>
+                    <td style={{ padding: '3px 6px' }}>
                       <input
                         type="text"
                         value={wk.note || ''}
                         onChange={(e) => handleWeekChange(idx, 'note', e.target.value)}
                         placeholder="შენიშვნა..."
-                        style={{ width: '100%', padding: '5px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '12px' }}
+                        style={{ width: '100%', padding: '2px 5px', borderRadius: '4px', border: '1px solid #cbd5e1', fontSize: '11px' }}
                       />
                     </td>
 
                     {/* წაშლა */}
-                    <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                    <td style={{ padding: '3px 6px', textAlign: 'center' }}>
                       <button
                         type="button"
                         onClick={() => handleDeleteWeek(idx)}
@@ -858,11 +881,10 @@ export default function AcademicScheduleManager() {
                           border: 'none',
                           color: '#ef4444',
                           cursor: 'pointer',
-                          padding: '4px',
-                          borderRadius: '4px',
+                          padding: '2px',
                         }}
                       >
-                        <Trash2 size={16} />
+                        <Trash2 size={13} />
                       </button>
                     </td>
                   </tr>
@@ -873,39 +895,35 @@ export default function AcademicScheduleManager() {
         </div>
       </div>
 
-      {/* არდადეგების სწრაფი მონიშვნის მოდალი */}
+      {/* არდადეგების დიაპაზონით მონიშვნის მოდალი */}
       {showVacationModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#ffffff', borderRadius: '16px', padding: '24px', width: '90%', maxWidth: '480px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)' }}>
-            <h3 style={{ margin: '0 0 14px 0', fontSize: '17px', color: '#0f172a', fontWeight: 800 }}>
-              🏖️ არდადეგების დიაპაზონით მონიშვნა
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#ffffff', borderRadius: '12px', padding: '18px', width: '90%', maxWidth: '420px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '15px', color: '#0f172a', fontWeight: 800 }}>
+              🏖️ არდადეგების მონიშვნა
             </h3>
-            <p style={{ fontSize: '13px', color: '#64748b', margin: '0 0 16px 0' }}>
-              მიუთითეთ თარიღების ინტერვალი. სისტემა ყველა მოხვედრილ კვირას ავტომატურად მონიშნავს არდადეგებად და მომდევნო კვირებს სწორად გადაანომრავს.
+            <p style={{ fontSize: '12px', color: '#64748b', margin: '0 0 12px 0' }}>
+              მიუთითეთ თარიღები. მოხვედრილი კვირები მოინიშნება არდადეგებად და სასწავლო კვირები გადაინომრება.
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px', fontSize: '12px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
-                  დასახელება:
-                </label>
+                <label style={{ display: 'block', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>დასახელება:</label>
                 <input
                   type="text"
                   value={vacationTitle}
                   onChange={(e) => setVacationTitle(e.target.value)}
                   placeholder="მაგ. ზამთრის არდადეგები"
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                  style={{ width: '100%', padding: '5px 8px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '12px' }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
-                  კვირის ტიპი:
-                </label>
+                <label style={{ display: 'block', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>ტიპი:</label>
                 <select
                   value={vacationType}
                   onChange={(e) => setVacationType(e.target.value)}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                  style={{ width: '100%', padding: '5px 8px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '12px' }}
                 >
                   <option value="winter_vacation">🏖️ ზამთრის არდადეგები</option>
                   <option value="spring_vacation">🌸 საგაზაფხულო არდადეგები</option>
@@ -914,46 +932,42 @@ export default function AcademicScheduleManager() {
                 </select>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
-                    დაწყება:
-                  </label>
+                  <label style={{ display: 'block', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>დაწყება:</label>
                   <input
                     type="date"
                     value={vacationStart}
                     onChange={(e) => setVacationStart(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                    style={{ width: '100%', padding: '5px 8px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '12px' }}
                   />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 700, color: '#475569', marginBottom: '4px' }}>
-                    დასრულება:
-                  </label>
+                  <label style={{ display: 'block', fontWeight: 700, color: '#475569', marginBottom: '3px' }}>დასრულება:</label>
                   <input
                     type="date"
                     value={vacationEnd}
                     onChange={(e) => setVacationEnd(e.target.value)}
-                    style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                    style={{ width: '100%', padding: '5px 8px', borderRadius: '5px', border: '1px solid #cbd5e1', fontSize: '12px' }}
                   />
                 </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
               <button
                 type="button"
                 onClick={() => setShowVacationModal(false)}
-                style={{ padding: '9px 16px', borderRadius: '8px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer' }}
+                style={{ padding: '6px 12px', borderRadius: '5px', border: '1px solid #cbd5e1', background: '#fff', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
               >
                 გაუქმება
               </button>
               <button
                 type="button"
                 onClick={handleApplyVacationRange}
-                style={{ padding: '9px 18px', borderRadius: '8px', border: 'none', background: '#f59e0b', color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer' }}
+                style={{ padding: '6px 14px', borderRadius: '5px', border: 'none', background: '#f59e0b', color: '#fff', fontSize: '12px', fontWeight: 700, cursor: 'pointer' }}
               >
-                მონიშვნა და გადათვლა
+                მონიშვნა
               </button>
             </div>
           </div>

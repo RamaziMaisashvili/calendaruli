@@ -330,6 +330,9 @@ class AcademicSchedulePayload(BaseModel):
 
 
 @router.get("/academic-schedules")
+@router.get("/academic-schedules/")
+@router.get("/academic-schedule")
+@router.get("/academic-schedule/")
 def list_academic_schedules(current_user: dict = Depends(get_current_user)):
     conn = get_connection()
     try:
@@ -380,6 +383,9 @@ def get_academic_schedule(schedule_id: int, current_user: dict = Depends(get_cur
 
 
 @router.post("/academic-schedules")
+@router.post("/academic-schedules/")
+@router.post("/academic-schedule")
+@router.post("/academic-schedule/")
 def save_academic_schedule(payload: AcademicSchedulePayload, current_user: dict = Depends(get_current_user)):
     conn = get_connection()
     try:

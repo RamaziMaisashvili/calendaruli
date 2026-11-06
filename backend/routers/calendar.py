@@ -290,3 +290,166 @@ def delete_saved_calendar(cal_id: int, current_user: dict = Depends(get_current_
         return {"success": True, "message": "კალენდარული გეგმა წაიშალა"}
     finally:
         conn.close()
+
+
+# ============================================================================
+# სასწავლო კვირებისა და საერთო აკადემიური კალენდრის მართვა (შაბლონები & პროგრამები)
+# ============================================================================
+
+def ensure_academic_schedule_table(conn):
+    with conn.cursor() as cursor:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS academic_schedules (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                program_name VARCHAR(255) NULL,
+                academic_year VARCHAR(50) NULL,
+                start_date VARCHAR(50) NOT NULL,
+                total_weeks INT DEFAULT 42,
+                is_template TINYINT(1) DEFAULT 0,
+                weeks_json LONGTEXT NULL,
+                holidays_json LONGTEXT NULL,
+                created_by INT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        """)
+    conn.commit()
+
+
+class AcademicSchedulePayload(BaseModel):
+    id: Optional[int] = None
+    title: str
+    program_name: Optional[str] = ""
+    academic_year: Optional[str] = "2026-2027"
+    start_date: str
+    total_weeks: Optional[int] = 42
+    is_template: Optional[bool] = False
+    weeks_json: Optional[Any] = None
+    holidays_json: Optional[Any] = None
+
+
+@router.get("/academic-schedules")
+def list_academic_schedules(current_user: dict = Depends(get_current_user)):
+    conn = get_connection()
+    try:
+        ensure_academic_schedule_table(conn)
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT id, title, program_name, academic_year, start_date, total_weeks, is_template, created_at, updated_at
+                FROM academic_schedules
+                ORDER BY is_template DESC, id DESC
+            """)
+            schedules = cursor.fetchall()
+            for s in schedules:
+                if s.get("created_at"):
+                    s["created_at"] = str(s["created_at"])
+                if s.get("updated_at"):
+                    s["updated_at"] = str(s["updated_at"])
+                s["is_template"] = bool(s.get("is_template", 0))
+            return {"success": True, "schedules": schedules}
+    finally:
+        conn.close()
+
+
+@router.get("/academic-schedules/{schedule_id}")
+def get_academic_schedule(schedule_id: int, current_user: dict = Depends(get_current_user)):
+    conn = get_connection()
+    try:
+        ensure_academic_schedule_table(conn)
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT * FROM academic_schedules WHERE id = %s", (schedule_id,))
+            item = cursor.fetchone()
+            if not item:
+                raise HTTPException(status_code=404, detail="სასწავლო კალენდარი ვერ მოიძებნა")
+            for field in ("weeks_json", "holidays_json"):
+                val = item.get(field)
+                if isinstance(val, str) and val.strip():
+                    try:
+                        item[field] = json.loads(val)
+                    except Exception:
+                        item[field] = None
+            if item.get("created_at"):
+                item["created_at"] = str(item["created_at"])
+            if item.get("updated_at"):
+                item["updated_at"] = str(item["updated_at"])
+            item["is_template"] = bool(item.get("is_template", 0))
+            return {"success": True, "schedule": item}
+    finally:
+        conn.close()
+
+
+@router.post("/academic-schedules")
+def save_academic_schedule(payload: AcademicSchedulePayload, current_user: dict = Depends(get_current_user)):
+    conn = get_connection()
+    try:
+        ensure_academic_schedule_table(conn)
+        weeks_str = json.dumps(payload.weeks_json, ensure_ascii=False) if payload.weeks_json is not None else None
+        holidays_str = json.dumps(payload.holidays_json, ensure_ascii=False) if payload.holidays_json is not None else None
+        is_tpl = 1 if payload.is_template else 0
+
+        with conn.cursor() as cursor:
+            if payload.id:
+                cursor.execute("""
+                    UPDATE academic_schedules
+                    SET title = %s,
+                        program_name = %s,
+                        academic_year = %s,
+                        start_date = %s,
+                        total_weeks = %s,
+                        is_template = %s,
+                        weeks_json = %s,
+                        holidays_json = %s
+                    WHERE id = %s
+                """, (
+                    payload.title,
+                    payload.program_name,
+                    payload.academic_year,
+                    payload.start_date,
+                    payload.total_weeks,
+                    is_tpl,
+                    weeks_str,
+                    holidays_str,
+                    payload.id
+                ))
+                saved_id = payload.id
+            else:
+                cursor.execute("""
+                    INSERT INTO academic_schedules (
+                        title, program_name, academic_year, start_date, total_weeks,
+                        is_template, weeks_json, holidays_json, created_by
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """, (
+                    payload.title,
+                    payload.program_name,
+                    payload.academic_year,
+                    payload.start_date,
+                    payload.total_weeks,
+                    is_tpl,
+                    weeks_str,
+                    holidays_str,
+                    current_user.get("id")
+                ))
+                saved_id = cursor.lastrowid
+        conn.commit()
+        return {
+            "success": True,
+            "message": "სასწავლო კალენდარი წარმატებით შეინახა",
+            "id": saved_id
+        }
+    finally:
+        conn.close()
+
+
+@router.delete("/academic-schedules/{schedule_id}")
+def delete_academic_schedule(schedule_id: int, current_user: dict = Depends(get_current_user)):
+    conn = get_connection()
+    try:
+        ensure_academic_schedule_table(conn)
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM academic_schedules WHERE id = %s", (schedule_id,))
+        conn.commit()
+        return {"success": True, "message": "სასწავლო კალენდარი წაიშალა"}
+    finally:
+        conn.close()
+

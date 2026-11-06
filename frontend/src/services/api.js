@@ -275,5 +275,31 @@ export const api = {
       method: 'DELETE',
     });
   },
+
+  // სასწავლო კვირებისა და საერთო კალენდრის მართვა (შაბლონები & პროგრამები)
+  getAcademicSchedules: async () => {
+    return request('/api/calendar/academic-schedules', {
+      method: 'GET',
+    });
+  },
+
+  getAcademicSchedule: async (id) => {
+    return request(`/api/calendar/academic-schedules/${id}`, {
+      method: 'GET',
+    });
+  },
+
+  saveAcademicSchedule: async (data) => {
+    return request('/api/calendar/academic-schedules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteAcademicSchedule: async (id) => {
+    return request(`/api/calendar/academic-schedules/${id}`, {
+      method: 'DELETE',
+    });
+  },
 };
 

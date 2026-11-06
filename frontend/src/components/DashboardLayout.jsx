@@ -1,6 +1,6 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, UploadCloud, LogOut, BookOpen, FolderOpen, Users, GraduationCap, Calendar } from 'lucide-react';
+import { LayoutDashboard, UploadCloud, LogOut, BookOpen, FolderOpen, Users, GraduationCap, Calendar, CalendarDays } from 'lucide-react';
 
 export default function DashboardLayout({ children, activeTab, setActiveTab }) {
   const { user, logout } = useAuth();
@@ -24,7 +24,8 @@ export default function DashboardLayout({ children, activeTab, setActiveTab }) {
 
   const getPageTitle = () => {
     if (activeTab === 'dashboard') return 'დაშბორდი';
-    if (activeTab === 'calendar') return 'კალენდარული გეგმის გენერატორი';
+    if (activeTab === 'academic-schedule') return 'სასწავლო კვირებისა და კალენდრის განრიგი';
+    if (activeTab === 'calendar') return 'მოდულის კალენდარული გეგმა';
     if (activeTab === 'teachers') return 'მასწავლებლების მართვა';
     if (activeTab === 'students') return 'სტუდენტების მართვა';
     if (activeTab === 'resources') {
@@ -58,16 +59,25 @@ export default function DashboardLayout({ children, activeTab, setActiveTab }) {
             <span>დაშბორდი</span>
           </button>
 
-          {/* 2. კალენდარული გეგმა */}
+          {/* 2. სასწავლო კვირების განრიგი */}
+          <button
+            className={`nav-item ${activeTab === 'academic-schedule' ? 'active' : ''}`}
+            onClick={() => setActiveTab('academic-schedule')}
+          >
+            <CalendarDays size={18} />
+            <span>სასწავლო კვირების განრიგი</span>
+          </button>
+
+          {/* 3. მოდულის კალენდარული გეგმა */}
           <button
             className={`nav-item ${activeTab === 'calendar' ? 'active' : ''}`}
             onClick={() => setActiveTab('calendar')}
           >
             <Calendar size={18} />
-            <span>კალენდარული გეგმა</span>
+            <span>მოდულის კალენდარული გეგმა</span>
           </button>
 
-          {/* 3. მასწავლებლები */}
+          {/* 4. მასწავლებლები */}
           <button
             className={`nav-item ${activeTab === 'teachers' ? 'active' : ''}`}
             onClick={() => setActiveTab('teachers')}

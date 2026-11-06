@@ -7,10 +7,11 @@ import FileUpload from './components/FileUpload';
 import TeachersCRUD from './components/TeachersCRUD';
 import StudentsCRUD from './components/StudentsCRUD';
 import CalendarGenerator from './components/CalendarGenerator';
+import AcademicScheduleManager from './components/AcademicScheduleManager';
 
 function MainApp() {
   const { isAuthenticated, loading } = useAuth();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('academic-schedule');
 
   if (loading) {
     return (
@@ -37,6 +38,7 @@ function MainApp() {
   return (
     <DashboardLayout activeTab={activeTab} setActiveTab={setActiveTab}>
       {activeTab === 'dashboard' && <Dashboard />}
+      {activeTab === 'academic-schedule' && <AcademicScheduleManager />}
       {activeTab === 'calendar' && <CalendarGenerator />}
       {activeTab === 'teachers' && <TeachersCRUD />}
       {activeTab === 'students' && <StudentsCRUD />}

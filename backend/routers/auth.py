@@ -1,6 +1,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from auth import authenticate_user, get_current_user, logout_user, security
+
+try:
+    from auth import authenticate_user, get_current_user, logout_user, security
+except Exception:
+    import sys
+    import os
+    parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    from auth import authenticate_user, get_current_user, logout_user, security
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 

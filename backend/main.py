@@ -6,7 +6,10 @@ from fastapi.responses import JSONResponse
 import pymysql
 
 from database import get_connection, DB_HOST, DB_PORT, DB_NAME, DB_USER
-from routers.auth import router as auth_router
+try:
+    from routers.auth import router as auth_router
+except (ImportError, AttributeError):
+    from auth import router as auth_router
 from routers.files import router as files_router
 from routers.teachers import router as teachers_router
 from routers.students import router as students_router

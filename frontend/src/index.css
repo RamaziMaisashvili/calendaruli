@@ -43,18 +43,27 @@ button {
   transition: all 0.2s ease;
 }
 
-input, select, textarea {
+input,
+select,
+textarea {
   font-family: inherit;
 }
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .fade-in {
- animation: fadeIn 0.25s ease-out;
+  animation: fadeIn 0.25s ease-out;
 }
 
 /* Auth Page */
@@ -437,7 +446,8 @@ input, select, textarea {
   transition: all 0.2s ease;
 }
 
-.dropzone:hover, .dropzone.active {
+.dropzone:hover,
+.dropzone.active {
   border-color: var(--primary);
   background: var(--primary-light);
 }
@@ -1455,11 +1465,13 @@ body.document-reader-open {
   .word-exact-table {
     border: 1px solid #000000 !important;
   }
+
   .word-exact-table td,
   .word-exact-table th {
     border: 1px solid #000000 !important;
     color: #000000 !important;
   }
+
   .word-exact-table .table-header-cell {
     background-color: #f1f5f9 !important;
     font-weight: bold !important;
@@ -1513,9 +1525,9 @@ body.document-reader-open {
   width: 648pt;
 }
 
-.frame > thead > tr > td,
-.frame > tbody > tr > td,
-.frame > tfoot > tr > td {
+.frame>thead>tr>td,
+.frame>tbody>tr>td,
+.frame>tfoot>tr>td {
   padding: 0;
   border: 0;
   vertical-align: top;
@@ -1589,14 +1601,15 @@ body.document-reader-open {
    ბეჭდვის რეჟიმი (@media print) - მრავალგვერდიანი ბეჭდვის სრული მხარდაჭერა
    ============================================================== */
 @media print {
+
   /* როცა დოკუმენტის დათვალიერება გახსნილია, დაიმალოს ძირითადი აპლიკაცია (#root) */
   body.document-reader-open #root,
   body:has(.word-viewer-overlay) #root {
     display: none !important;
   }
 
-  html, 
-  body, 
+  html,
+  body,
   body.document-reader-open {
     overflow: visible !important;
     height: auto !important;
@@ -1705,19 +1718,19 @@ body.document-reader-open {
     table-layout: auto !important;
   }
 
-  .frame > thead {
+  .frame>thead {
     display: table-header-group !important;
   }
 
-  .frame > tfoot {
+  .frame>tfoot {
     display: table-footer-group !important;
   }
 
   /* ჩარჩოს მთავარ შიგთავსს მიეცეს გვერდებზე თავისუფლად გადანაწილების უფლება */
   .frame,
-  .frame > tbody,
-  .frame > tbody > tr,
-  .frame > tbody > tr > td {
+  .frame>tbody,
+  .frame>tbody>tr,
+  .frame>tbody>tr>td {
     page-break-inside: auto !important;
     break-inside: auto !important;
     height: auto !important;
@@ -1752,8 +1765,13 @@ body.document-reader-open {
    ========================================================================== */
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .spin {
@@ -1898,6 +1916,7 @@ body.document-reader-open {
 .stat-label {
   font-size: 13px;
   color: var(--text-muted);
+  margin-left: 6px;
 }
 
 /* Alerts */
@@ -2099,6 +2118,7 @@ body.document-reader-open {
 .crud-data-table tbody tr:hover {
   background: #f8fafc;
 }
+
 .action-btn-refresh {
   display: inline-flex;
   align-items: center;
@@ -2128,6 +2148,7 @@ body.document-reader-open {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
 }
+
 .row-number {
   color: var(--text-muted);
   font-size: 13px;
@@ -2550,5 +2571,3 @@ body.document-reader-open {
 .btn-danger-confirm:hover {
   background: #dc2626;
 }
-
-

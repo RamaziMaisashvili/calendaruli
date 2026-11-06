@@ -411,11 +411,8 @@ export default function StudentsCRUD() {
               <thead>
                 <tr>
                   <th style={{ width: '45px' }}>#</th>
-                  <th>სახელი და გვარი</th>
-                  <th>პირადი N</th>
-                  <th>დაბ. თარიღი</th>
+                  <th>სახელი და გვარი</th>                  
                   <th>ნომერი</th>
-                  <th>ქალაქი</th>
                   <th>პროგრამა</th>
                   <th>მომხმარებელი</th>
                   <th>სტატუსი</th>
@@ -436,37 +433,13 @@ export default function StudentsCRUD() {
                           <span className="role-pill pill-student">სტუდენტი</span>
                         </div>
                       </div>
-                    </td>
-                    <td>
-                      {s.personal_id ? (
-                        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: '#1e293b', background: '#f8fafc', padding: '3px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}>
-                          {s.personal_id}
-                        </span>
-                      ) : (
-                        <span className="text-empty">—</span>
-                      )}
-                    </td>
-                    <td>
-                      <span style={{ fontSize: '13px', color: '#475569', whiteSpace: 'nowrap' }}>
-                        {s.birth_date ? s.birth_date.replace(' 00:00:00', '') : '—'}
-                      </span>
-                    </td>
+                    </td>                    
                     <td>
                       {s.phone ? (
                         <a href={`tel:${s.phone}`} className="contact-link" title="დარეკვა">
                           <Phone size={13} className="contact-icon" />
                           <span>{s.phone}</span>
                         </a>
-                      ) : (
-                        <span className="text-empty">—</span>
-                      )}
-                    </td>
-                    <td>
-                      {s.city ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', color: '#334155', padding: '3px 8px', borderRadius: '6px', fontSize: '12.5px', fontWeight: 500, whiteSpace: 'nowrap' }}>
-                          <MapPin size={12} style={{ color: '#64748b' }} />
-                          {s.city}
-                        </span>
                       ) : (
                         <span className="text-empty">—</span>
                       )}

@@ -129,3 +129,42 @@ def logout_user(token: str):
             conn.commit()
     finally:
         conn.close()
+
+# თუ auth.py პირდაპირ ან routers/auth.py-ის ნაცვლად იქნა იმპორტირებული
+from fastapi import APIRouter, Depends, status
+from pydantic import BaseModel
+
+router = APIRouter(prefix="/api/auth", tags=["Auth"])
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@router.post("/login")
+def login(req: LoginRequest):
+    result = authenticate_user(req.username.strip(), req.password)
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="მომხმარებლის სახელი ან პაროლი არასწორია"
+        )
+    return {
+        "success": True,
+        "token": result["token"],
+        "user": result["user"],
+        "message": "ავტორიზაცია წარმატებით დასრულდა"
+    }
+
+@router.get("/me")
+def get_me(user: dict = Depends(get_current_user)):
+    return {
+        "success": True,
+        "user": user
+    }
+
+@router.post("/logout")
+def logout(credentials = Depends(security)):
+    if credentials:
+        logout_user(credentials.credentials)
+    return {"success": True, "message": "წარმატებით გამოხვედით სისტემიდან"}
+

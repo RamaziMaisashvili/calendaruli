@@ -639,12 +639,37 @@ export default function CalendarGenerator() {
 
     outcomesConfig.forEach((oc, ocIdx) => {
       const targetContact = Math.round(getEffectiveContactHours(oc));
-      let remainingHours = targetContact;
-      const topics = oc.topicsList && oc.topicsList.length > 0 ? oc.topicsList : [oc.outcome_name];
-      let topicIdx = 0;
+      const rawTopics = oc.topicsList && oc.topicsList.length > 0 ? oc.topicsList : [oc.outcome_name || `თემა ${ocIdx + 1}`];
 
+      // თემების მომზადება: თითოეულ თემას თავისი საკონტაქტო საათი (მაგ: 15 სთ და 13 თემა -> პირველ ორს 2 სთ, დანარჩენ 11 თემას 1 სთ)
+      let topicItems = [];
+      const numT = rawTopics.length;
+      if (targetContact >= numT && numT > 0) {
+        const baseH = Math.floor(targetContact / numT);
+        const extraH = targetContact % numT;
+        topicItems = rawTopics.map((t, i) => ({
+          topic: t,
+          hours: i < extraH ? baseH + 1 : baseH,
+        }));
+      } else if (targetContact > 0 && numT > 0) {
+        // თუ საათები თემებზე ნაკლებია, თემები ჯგუფდება ისე, რომ არცერთი სტრიქონი არ დაიკარგოს
+        for (let h = 0; h < targetContact; h++) {
+          const s = Math.floor((h * numT) / targetContact);
+          const e = Math.floor(((h + 1) * numT) / targetContact);
+          topicItems.push({
+            topic: rawTopics.slice(s, e).join('; '),
+            hours: 1,
+          });
+        }
+      } else {
+        topicItems = [{ topic: oc.outcome_name || `თემა ${ocIdx + 1}`, hours: Math.max(1, targetContact) }];
+      }
+
+      let topicItemIdx = 0;
+      let currentItemRemainingHours = topicItems[0]?.hours || 1;
       let safetyCounter = 0;
-      while (remainingHours > 0 && safetyCounter < 700) {
+
+      while (topicItemIdx < topicItems.length && safetyCounter < 1000) {
         safetyCounter++;
         const wd = getIsoWeekday(currentCursorDate);
 
@@ -656,70 +681,88 @@ export default function CalendarGenerator() {
 
           if (holidayMap.has(currentCursorDate)) {
             const holidayName = holidayMap.get(currentCursorDate);
-            // თუ მთელი კვირა არდადეგებია, ნაგულისხმევად შემდეგ კვირაზე გადადის
             const resolution = customResolutions[currentCursorDate] || 'next_week';
-            const hoursThatWouldBeScheduled = Math.min(Math.round(sessionStandardHours), Math.round(remainingHours));
-
-            detectedCollisions.push({
-              date: currentCursorDate,
-              holidayName,
-              outcomeNumber: oc.outcome_number,
-              outcomeName: oc.outcome_name,
-              missedHours: Math.round(hoursThatWouldBeScheduled),
-              remainingOutcomeHours: Math.round(remainingHours),
-              resolution,
-              isVacationWeek,
-            });
 
             if (resolution === 'saturday') {
               const satDate = getSaturdayOfSameWeek(currentCursorDate);
               if (!holidayMap.has(satDate)) {
                 const satAcadWeek = getAcadWeekForDate(satDate);
-                const hrs = Math.min(Math.round(sessionStandardHours), Math.round(remainingHours));
-                const chosenTopic = topics[Math.min(topicIdx, topics.length - 1)] || oc.outcome_name;
+                let dayCap = sessionStandardHours;
 
-                generatedSessions.push({
-                  id: `sess_${ocIdx}_${generatedSessions.length + 1}`,
-                  outcomeIndex: ocIdx,
-                  outcomeNumber: oc.outcome_number,
-                  outcomeName: oc.outcome_name,
-                  date: satDate,
-                  academicWeek: satAcadWeek,
-                  topic: chosenTopic,
-                  hoursContact: hrs,
-                  hoursIndependent: 0,
-                  hoursEvaluation: 0,
-                  isSaturdayCompensation: true,
-                  compensatedFrom: currentCursorDate,
-                  note: `შაბათის კომპენსაცია (${formatDateGeo(currentCursorDate)}-ის ნაცვლად)`,
-                });
+                while (dayCap > 0 && topicItemIdx < topicItems.length) {
+                  const item = topicItems[topicItemIdx];
+                  const hrsToTake = Math.min(dayCap, currentItemRemainingHours);
 
-                remainingHours = Math.max(0, Math.round(remainingHours - hrs));
-                topicIdx += 1;
+                  generatedSessions.push({
+                    id: `sess_${ocIdx}_${generatedSessions.length + 1}`,
+                    outcomeIndex: ocIdx,
+                    outcomeNumber: oc.outcome_number,
+                    outcomeName: oc.outcome_name,
+                    date: satDate,
+                    academicWeek: satAcadWeek,
+                    topic: item.topic,
+                    hoursContact: hrsToTake,
+                    hoursIndependent: 0,
+                    hoursEvaluation: 0,
+                    isSaturdayCompensation: true,
+                    compensatedFrom: currentCursorDate,
+                    note: `შაბათის კომპენსაცია (${formatDateGeo(currentCursorDate)}-ის ნაცვლად)`,
+                  });
+
+                  dayCap -= hrsToTake;
+                  currentItemRemainingHours -= hrsToTake;
+                  if (currentItemRemainingHours <= 0) {
+                    topicItemIdx++;
+                    if (topicItemIdx < topicItems.length) {
+                      currentItemRemainingHours = topicItems[topicItemIdx].hours;
+                    }
+                  }
+                }
               }
+            } else {
+              detectedCollisions.push({
+                date: currentCursorDate,
+                holidayName,
+                outcomeNumber: oc.outcome_number,
+                outcomeName: oc.outcome_name,
+                missedHours: Math.round(sessionStandardHours),
+                remainingOutcomeHours: 0,
+                resolution,
+                isVacationWeek,
+              });
             }
           } else {
-            // ნორმალური სასწავლო დღე (არ არის დასვენება)
-            const hrs = Math.min(Math.round(sessionStandardHours), Math.round(remainingHours));
-            const chosenTopic = topics[Math.min(topicIdx, topics.length - 1)] || oc.outcome_name;
+            // ჩვეულებრივი სასწავლო დღე:
+            let dayCap = sessionStandardHours;
 
-            generatedSessions.push({
-              id: `sess_${ocIdx}_${generatedSessions.length + 1}`,
-              outcomeIndex: ocIdx,
-              outcomeNumber: oc.outcome_number,
-              outcomeName: oc.outcome_name,
-              date: currentCursorDate,
-              academicWeek: currentWeekForDate,
-              topic: chosenTopic,
-              hoursContact: hrs,
-              hoursIndependent: 0,
-              hoursEvaluation: 0,
-              isSaturdayCompensation: false,
-              note: '',
-            });
+            while (dayCap > 0 && topicItemIdx < topicItems.length) {
+              const item = topicItems[topicItemIdx];
+              const hrsToTake = Math.min(dayCap, currentItemRemainingHours);
 
-            remainingHours = Math.max(0, Math.round(remainingHours - hrs));
-            topicIdx += 1;
+              generatedSessions.push({
+                id: `sess_${ocIdx}_${generatedSessions.length + 1}`,
+                outcomeIndex: ocIdx,
+                outcomeNumber: oc.outcome_number,
+                outcomeName: oc.outcome_name,
+                date: currentCursorDate,
+                academicWeek: currentWeekForDate,
+                topic: item.topic,
+                hoursContact: hrsToTake,
+                hoursIndependent: 0,
+                hoursEvaluation: 0,
+                isSaturdayCompensation: false,
+                note: '',
+              });
+
+              dayCap -= hrsToTake;
+              currentItemRemainingHours -= hrsToTake;
+              if (currentItemRemainingHours <= 0) {
+                topicItemIdx++;
+                if (topicItemIdx < topicItems.length) {
+                  currentItemRemainingHours = topicItems[topicItemIdx].hours;
+                }
+              }
+            }
           }
         }
 
@@ -839,13 +882,14 @@ export default function CalendarGenerator() {
     const ocSessions = sessions.filter((s) => s.outcomeIndex === outcomeIdx);
     if (ocSessions.length === 0) return;
 
-    let rem = target;
-    const limit = Math.max(1, Math.round(Number(dailyHourLimit) || 4));
+    const n = ocSessions.length;
+    const baseH = Math.floor(target / n);
+    const extraH = target % n;
+
     const updated = sessions.map((s) => {
       if (s.outcomeIndex !== outcomeIdx) return s;
-      const isLast = s.id === ocSessions[ocSessions.length - 1].id;
-      const assigned = isLast ? Math.max(0, rem) : Math.min(limit, Math.max(0, rem));
-      rem = Math.max(0, Math.round(rem - assigned));
+      const sIdxInOc = ocSessions.findIndex((item) => item.id === s.id);
+      const assigned = sIdxInOc < extraH ? baseH + 1 : baseH;
       return { ...s, hoursContact: assigned };
     });
     setSessions(updated);

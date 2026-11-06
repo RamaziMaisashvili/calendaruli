@@ -9,6 +9,31 @@ import {
 import DocumentReader from './DocumentReader';
 import { SCHOOL22_LOGO_BASE64 } from './school22_logo';
 
+// Microsoft Word-ის საკუთარი გამორჩეული იკონკა (ლურჯი W ბეიჯით)
+const WordIcon = ({ size = 26 }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+    <path d="M7 3C5.89543 3 5 3.89543 5 5V27C5 28.1046 5.89543 29 7 29H25C26.1046 29 27 28.1046 27 27V11L19 3H7Z" fill="#185ABD" />
+    <path d="M19 3V9C19 10.1046 19.8954 11 21 11H27L19 3Z" fill="#2877E9" />
+    <rect x="9" y="15" width="14" height="2" rx="1" fill="#FFFFFF" fillOpacity="0.85" />
+    <rect x="9" y="19" width="14" height="2" rx="1" fill="#FFFFFF" fillOpacity="0.85" />
+    <rect x="9" y="23" width="9" height="2" rx="1" fill="#FFFFFF" fillOpacity="0.85" />
+    <rect x="3" y="10" width="13" height="13" rx="2.5" fill="#103F91" filter="drop-shadow(0 1px 2px rgba(0,0,0,0.3))" />
+    <text x="9.5" y="19.5" fill="#FFFFFF" fontSize="9.5" fontWeight="900" fontFamily="Segoe UI, -apple-system, Arial, sans-serif" textAnchor="middle">W</text>
+  </svg>
+);
+
+// Microsoft Excel-ის საკუთარი გამორჩეული იკონკა (მწვანე X ბეიჯით)
+const ExcelIcon = ({ size = 26 }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+    <path d="M7 3C5.89543 3 5 3.89543 5 5V27C5 28.1046 5.89543 29 7 29H25C26.1046 29 27 28.1046 27 27V11L19 3H7Z" fill="#107C41" />
+    <path d="M19 3V9C19 10.1046 19.8954 11 21 11H27L19 3Z" fill="#1F9A55" />
+    <rect x="9" y="14" width="14" height="11" rx="1" fill="#FFFFFF" fillOpacity="0.2" />
+    <path d="M9 17.5H23M9 21H23M16 14V25" stroke="#FFFFFF" strokeWidth="1" strokeOpacity="0.85" />
+    <rect x="3" y="10" width="13" height="13" rx="2.5" fill="#0B552C" filter="drop-shadow(0 1px 2px rgba(0,0,0,0.3))" />
+    <text x="9.5" y="19.5" fill="#FFFFFF" fontSize="9.5" fontWeight="900" fontFamily="Segoe UI, -apple-system, Arial, sans-serif" textAnchor="middle">X</text>
+  </svg>
+);
+
 export default function FileUpload() {
   const { user } = useAuth();
   const [files, setFiles] = useState([]);
@@ -145,15 +170,42 @@ export default function FileUpload() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const getFileIcon = (fileName) => {
-    const ext = fileName.split('.').pop().toLowerCase();
+  const getFileIconMeta = (fileName) => {
+    const ext = (fileName || '').split('.').pop().toLowerCase();
     if (['xlsx', 'xls', 'csv'].includes(ext)) {
-      return <FileSpreadsheet size={18} />;
+      return {
+        icon: <ExcelIcon size={26} />,
+        bg: '#ecfdf5',
+        border: '#a7f3d0',
+        title: 'Excel ცხრილი',
+      };
+    }
+    if (['docx', 'doc'].includes(ext)) {
+      return {
+        icon: <WordIcon size={26} />,
+        bg: '#eff6ff',
+        border: '#bfdbfe',
+        title: 'Word დოკუმენტი',
+      };
     }
     if (['json', 'py', 'js', 'html'].includes(ext)) {
-      return <FileCode size={18} />;
+      return {
+        icon: <FileCode size={22} color="#0284c7" />,
+        bg: '#f0f9ff',
+        border: '#bae6fd',
+        title: 'კოდის ფაილი',
+      };
     }
-    return <FileText size={18} />;
+    return {
+      icon: <FileText size={22} color="#64748b" />,
+      bg: '#f8fafc',
+      border: '#e2e8f0',
+      title: 'დოკუმენტი',
+    };
+  };
+
+  const getFileIcon = (fileName) => {
+    return getFileIconMeta(fileName).icon;
   };
 
   // -------------------------------------------------------------
@@ -551,12 +603,27 @@ export default function FileUpload() {
                 <tbody>
                   {paginatedFiles.map((file) => {
                     const cls = resolveFileClassification(file);
+                    const iconMeta = getFileIconMeta(file.original_name);
                     return (
                       <tr key={file.id}>
                         <td>
                           <div className="file-name-cell">
-                            <div className="file-icon-box">
-                              {getFileIcon(file.original_name)}
+                            <div
+                              className="file-icon-box"
+                              style={{
+                                background: iconMeta.bg,
+                                border: `1px solid ${iconMeta.border}`,
+                                width: '38px',
+                                height: '38px',
+                                borderRadius: '8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0,
+                              }}
+                              title={iconMeta.title}
+                            >
+                              {iconMeta.icon}
                             </div>
                             <div>
                               <div className="file-title" title={file.original_name}>

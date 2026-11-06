@@ -319,7 +319,7 @@ export default function CalendarGenerator() {
   const [startAcademicWeek, setStartAcademicWeek] = useState(1);
   const [distributionMethod, setDistributionMethod] = useState(1); // 1, 2, ან 3
   const [selectedDays, setSelectedDays] = useState([1, 3, 5]);
-  const [dailyHourLimit, setDailyHourLimit] = useState(4);
+  const [dailyHourLimit, setDailyHourLimit] = useState(6);
   const [deductEvalFromContact, setDeductEvalFromContact] = useState(false);
   const [hideIndependentInRows, setHideIndependentInRows] = useState(true);
 
@@ -529,12 +529,15 @@ export default function CalendarGenerator() {
         const autoStartDate = getStartDateForAcademicWeek(firstWeekNum, academicYearStartDate, holidays, selectedDays);
         setStartDate(autoStartDate);
 
-        const firstWeekHours = Number(ws[0].hours || 4);
+        const firstWeekHours = Number(ws[0].hours || 6);
         if (firstWeekHours > 0) {
-          // თუ კვირის დატვირთვაა (> 8 სთ, მაგ. 15 ან 20 სთ), გავყოთ კვირის დღეებზე, რომ დღიური ლიმიტი სწორად დაჯდეს
-          const calcDaily = firstWeekHours > 8
+          // თუ კვირის დატვირთვაა (> 8 სთ, მაგ. 15 ან 20 სთ), გავყოთ კვირის დღეებზე
+          let calcDaily = firstWeekHours > 8
             ? Math.max(1, Math.round(firstWeekHours / (selectedDays.length || 3)))
             : firstWeekHours;
+          // დღიური საათების ლიმიტი ყოველთვის 6-დან 8 სთ-მდე (დეფაულტად 6 სთ)
+          if (calcDaily < 6) calcDaily = 6;
+          if (calcDaily > 8) calcDaily = 8;
           setDailyHourLimit(calcDaily);
         }
       }
@@ -740,9 +743,14 @@ export default function CalendarGenerator() {
         if (ws.length > 0) {
           const firstWeekNum = Number(ws[0].week || 1);
           setStartAcademicWeek(firstWeekNum);
-          const firstWeekHours = Number(ws[0].hours || 4);
+          const firstWeekHours = Number(ws[0].hours || 6);
           if (firstWeekHours > 0) {
-            setDailyHourLimit(firstWeekHours);
+            let calcDaily = firstWeekHours > 8
+              ? Math.max(1, Math.round(firstWeekHours / (selectedDays.length || 3)))
+              : firstWeekHours;
+            if (calcDaily < 6) calcDaily = 6;
+            if (calcDaily > 8) calcDaily = 8;
+            setDailyHourLimit(calcDaily);
           }
         }
       } else {
@@ -830,7 +838,9 @@ export default function CalendarGenerator() {
       }
       if (ws[0].hours) {
         const h = Number(ws[0].hours);
-        const calcDaily = h > 8 ? Math.max(1, Math.round(h / (selectedDays.length || 3))) : h;
+        let calcDaily = h > 8 ? Math.max(1, Math.round(h / (selectedDays.length || 3))) : h;
+        if (calcDaily < 6) calcDaily = 6;
+        if (calcDaily > 8) calcDaily = 8;
         setDailyHourLimit(calcDaily);
       }
     }
@@ -2045,15 +2055,18 @@ export default function CalendarGenerator() {
 
                 <div>
                   <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#1e3a8a' }}>
-                    დღიური საათები (დღეში ჩასატარებელი სთ):
+                    დღიური საათების ლიმიტი (6 - 8 სთ):
                   </label>
                   <input
                     type="number"
                     min="1"
-                    max="10"
+                    max="8"
                     step="1"
                     value={dailyHourLimit}
-                    onChange={(e) => setDailyHourLimit(Math.max(1, Math.round(Number(e.target.value) || 1)))}
+                    onChange={(e) => {
+                      const val = Math.round(Number(e.target.value) || 6);
+                      setDailyHourLimit(Math.max(1, Math.min(8, val)));
+                    }}
                     style={{ width: '80px', padding: '8px 12px', borderRadius: '8px', border: '2px solid #2563eb', fontWeight: 700, fontSize: '14px' }}
                   />
                 </div>

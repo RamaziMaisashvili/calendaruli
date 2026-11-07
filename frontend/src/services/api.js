@@ -99,7 +99,7 @@ export const api = {
   },
 
   // ფაილების მართვა და ატვირთვა (Multiple files)
-  uploadFiles: async (files, overwrite = false) => {
+  uploadFiles: async (files, overwrite = false, targetFolder = 'auto') => {
     const token = getAuthToken();
     const headers = {};
     if (token) {
@@ -112,6 +112,9 @@ export const api = {
       formData.append('files', file);
     });
     formData.append('overwrite', overwrite ? 'true' : 'false');
+    if (targetFolder) {
+      formData.append('target_folder', targetFolder);
+    }
 
     const response = await fetch(`${BASE_URL}/api/files/upload`, {
       method: 'POST',
@@ -136,6 +139,12 @@ export const api = {
     }
 
     return data;
+  },
+
+  reorganizeFiles: async () => {
+    return request('/api/files/reorganize', {
+      method: 'POST',
+    });
   },
 
   getFiles: async () => {

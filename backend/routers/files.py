@@ -14,13 +14,160 @@ router = APIRouter(prefix="/api/files", tags=["Files"])
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+MODULES_DIR = os.path.join(UPLOAD_DIR, "modules")
+PLANS_DIR = os.path.join(UPLOAD_DIR, "plans")
+RESOURCES_DIR = os.path.join(UPLOAD_DIR, "resources")
+
+# ვქმნით როგორც ძირითად, ისე ცალკეულ მიზნობრივ საქაღალდეებს
+for _d in (UPLOAD_DIR, MODULES_DIR, PLANS_DIR, RESOURCES_DIR):
+    os.makedirs(_d, exist_ok=True)
+
+def get_target_subfolder(filename: str, explicit_folder: str = "auto") -> str:
+    """
+    აბრუნებს სამიზნე ქვე-საქაღალდეს:
+    - 'modules' (მოდულები: .docx/.doc)
+    - 'plans' (სასწავლო გეგმები: .xlsx/.xls)
+    - 'resources' (მატერიალური რესურსები და სხვა ფაილები)
+    """
+    if explicit_folder in ("modules", "plans", "resources"):
+        return explicit_folder
+
+    fname_lower = (filename or "").lower()
+    ext = os.path.splitext(fname_lower)[1]
+
+    # 1. Word დოკუმენტები -> მოდულების საქაღალდე
+    if ext in [".docx", ".doc"]:
+        return "modules"
+
+    # 2. Excel დოკუმენტები -> სასწავლო გეგმები ან მატერიალური რესურსები
+    if ext in [".xlsx", ".xls", ".csv"]:
+        resource_kws = ["რესურს", "resource", "მატერიალ", "ინვენტარ", "აღჭურვილ", "დანადგარ", "მასალ"]
+        plan_kws = ["გეგმ", "plan", "front-end", "frontend", "ქსელ", "სისტემ", "სილაბუს", "საათებ"]
+        if any(k in fname_lower for k in resource_kws):
+            return "resources"
+        if any(k in fname_lower for k in plan_kws):
+            return "plans"
+        return "plans"
+
+    # 3. ყველა სხვა ფაილი -> resources საქაღალდე
+    return "resources"
+
+def locate_file_path(filename: str, raw_path: str = None) -> str | None:
+    """
+    პოულობს ფაილის რეალურ ფიზიკურ მისამართს დისკზე:
+    ამოწმებს raw_path-ს, modules/, plans/, resources/ საქაღალდეებს და UPLOAD_DIR-ის ძირს.
+    """
+    from urllib.parse import unquote
+    orig = filename or ""
+    unquoted_orig = unquote(orig)
+    base_raw = os.path.basename((raw_path or "").replace("\\", "/"))
+
+    candidates = []
+    if raw_path:
+        candidates.append(raw_path)
+        candidates.append(os.path.abspath(raw_path))
+
+    search_dirs = [
+        MODULES_DIR,
+        PLANS_DIR,
+        RESOURCES_DIR,
+        UPLOAD_DIR,
+        os.path.join(BASE_DIR, "uploads"),
+        os.path.join(BASE_DIR, "uploads", "modules"),
+        os.path.join(BASE_DIR, "uploads", "plans"),
+        os.path.join(BASE_DIR, "uploads", "resources"),
+        os.path.join(BASE_DIR, "..", "uploads"),
+        os.path.join(BASE_DIR, "..", "uploads", "modules"),
+        os.path.join(BASE_DIR, "..", "uploads", "plans"),
+        os.path.join(BASE_DIR, "..", "uploads", "resources"),
+        "/var/www/calendar.learn/backend/uploads/modules",
+        "/var/www/calendar.learn/backend/uploads/plans",
+        "/var/www/calendar.learn/backend/uploads/resources",
+        "/var/www/calendar.learn/backend/uploads",
+        "/var/www/calendar.learn/uploads/modules",
+        "/var/www/calendar.learn/uploads/plans",
+        "/var/www/calendar.learn/uploads/resources",
+        "/var/www/calendar.learn/uploads",
+    ]
+    if raw_path:
+        search_dirs.append(os.path.dirname(raw_path))
+
+    for d in search_dirs:
+        if not d or not os.path.isdir(d):
+            continue
+        for name in [orig, unquoted_orig, base_raw]:
+            if name:
+                candidates.append(os.path.join(d, name))
+
+    for p in candidates:
+        if p and os.path.isfile(p):
+            return p
+
+    # Case-insensitive ძებნა
+    target_names = {n.lower() for n in [orig, unquoted_orig, base_raw] if n}
+    for d in search_dirs:
+        if not d or not os.path.isdir(d):
+            continue
+        try:
+            for fname in os.listdir(d):
+                if fname.lower() in target_names:
+                    cand = os.path.join(d, fname)
+                    if os.path.isfile(cand):
+                        return cand
+        except Exception:
+            pass
+
+    return None
+
+def reorganize_existing_files():
+    """
+    uploads/ ძირში არსებულ ფაილებს ავტომატურად გადაანაწილებს modules/, plans/, resources/ საქაღალდეებში
+    და განაახლებს uploaded_files ბაზას.
+    """
+    moved_count = 0
+    try:
+        conn = get_connection()
+        with conn.cursor() as cur:
+            if os.path.isdir(UPLOAD_DIR):
+                for item in os.listdir(UPLOAD_DIR):
+                    full_path = os.path.join(UPLOAD_DIR, item)
+                    if os.path.isfile(full_path):
+                        target_sub = get_target_subfolder(item)
+                        target_dir = os.path.join(UPLOAD_DIR, target_sub)
+                        os.makedirs(target_dir, exist_ok=True)
+                        new_path = os.path.join(target_dir, item)
+                        try:
+                            shutil.move(full_path, new_path)
+                            cur.execute(
+                                "UPDATE uploaded_files SET file_path = %s WHERE original_name = %s",
+                                (new_path, item)
+                            )
+                            moved_count += 1
+                        except Exception as err:
+                            logging.warning(f"Failed to move {item}: {err}")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logging.warning(f"reorganize_existing_files error: {e}")
+    return moved_count
+
+@router.post("/reorganize")
+def reorganize_files_endpoint(user: dict = Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="მოქმედების უფლება აქვს მხოლოდ ადმინისტრატორს")
+    count = reorganize_existing_files()
+    return {
+        "success": True,
+        "message": f"საქაღალდეებში წარმატებით გადანაწილდა {count} ფაილი",
+        "moved_count": count
+    }
 
 @router.post("/upload")
 async def upload_files(
     files: list[UploadFile] = File(default=[]),
     file: UploadFile = File(default=None),
     overwrite: str = Form("false"),
+    target_folder: str = Form("auto"),
     user: dict = Depends(get_current_user)
 ):
     # ფაილის ატვირთვის უფლება აქვს მხოლოდ ადმინისტრატორს (admin)
@@ -58,19 +205,26 @@ async def upload_files(
                     except Exception:
                         pass
 
-                    saved_path = os.path.join(UPLOAD_DIR, clean_name)
+                    subfolder = get_target_subfolder(clean_name, target_folder)
+                    target_dir = os.path.join(UPLOAD_DIR, subfolder)
+                    os.makedirs(target_dir, exist_ok=True)
+                    saved_path = os.path.join(target_dir, clean_name)
 
-                    cur.execute("SELECT id, original_name FROM uploaded_files WHERE original_name = %s", (clean_name,))
+                    cur.execute("SELECT id, original_name, file_path FROM uploaded_files WHERE original_name = %s", (clean_name,))
                     existing = cur.fetchone()
 
-                    if existing or os.path.exists(saved_path):
+                    # შევამოწმოთ არსებობს თუ არა დისკზე (სამიზნე საქაღალდეში ან ძველ ლოკაციაზე)
+                    disk_path = locate_file_path(clean_name, saved_path)
+                    if existing or disk_path:
                         conflicting_names.append(clean_name)
 
                     files_to_process.append({
                         "file": f,
                         "filename": clean_name,
                         "saved_path": saved_path,
-                        "existing_id": existing["id"] if existing else None
+                        "subfolder": subfolder,
+                        "existing_id": existing["id"] if existing else None,
+                        "old_path": existing["file_path"] if existing else disk_path
                     })
         finally:
             conn.close()
@@ -98,6 +252,14 @@ async def upload_files(
                     fname = item["filename"]
                     spath = item["saved_path"]
                     ext = os.path.splitext(fname)[1]
+
+                    # ძველი ფაილის გასუფთავება თუ სხვა ლოკაციაზე იდო
+                    old_p = item.get("old_path")
+                    if old_p and os.path.abspath(old_p) != os.path.abspath(spath) and os.path.exists(old_p):
+                        try:
+                            os.remove(old_p)
+                        except Exception:
+                            pass
 
                     try:
                         f.file.seek(0)
@@ -140,6 +302,28 @@ async def upload_files(
 
                     # პითონით დამუშავება და მოდულის/შედეგების პირდაპირ ბაზაში ჩაწერა
                     proc_res = process_uploaded_file(spath, fname, conn=conn, file_id=fid)
+
+                    # ავტომატური კორექტირება Excel ფაილის შიგთავსის მიხედვით
+                    if target_folder == "auto" and ext in [".xlsx", ".xls", ".csv"]:
+                        sum_details = proc_res.get("details", {}) if isinstance(proc_res, dict) else {}
+                        det_type = str(sum_details.get("type", "")).lower()
+                        if "რესურს" in det_type and item["subfolder"] != "resources":
+                            res_path = os.path.join(RESOURCES_DIR, fname)
+                            try:
+                                shutil.move(spath, res_path)
+                                spath = res_path
+                                item["subfolder"] = "resources"
+                            except Exception as e:
+                                logging.warning(f"Failed to relocate resource excel: {e}")
+                        elif "გეგმა" in det_type and item["subfolder"] != "plans":
+                            plan_path = os.path.join(PLANS_DIR, fname)
+                            try:
+                                shutil.move(spath, plan_path)
+                                spath = plan_path
+                                item["subfolder"] = "plans"
+                            except Exception as e:
+                                logging.warning(f"Failed to relocate plan excel: {e}")
+
                     summary_json = json.dumps(proc_res, ensure_ascii=False)
 
                     try:
@@ -334,12 +518,22 @@ def detect_org_and_type(original_name: str, summary_data: dict = None, cm_type=N
     type_names = {1: "პროფესიული", 2: "ზოგადი", 3: "ინტეგრირებული"}
     mod_type_name = type_names.get(mod_type_id, "პროფესიული" if is_word else None)
 
+    folder = "modules" if is_word else ("plans" if category == "plan" else "resources")
+    folder_labels = {
+        "modules": "მოდულები (modules)",
+        "plans": "სასწავლო გეგმები (plans)",
+        "resources": "მატერიალური რესურსები და სხვა (resources)"
+    }
+    folder_label = folder_labels.get(folder, "რესურსები")
+
     return {
         **org,
         "module_type_id": mod_type_id,
         "module_type_name": mod_type_name,
         "resource_category": category,
-        "resource_category_label": category_label
+        "resource_category_label": category_label,
+        "folder": folder,
+        "folder_label": folder_label
     }
 
 @router.get("")
@@ -410,7 +604,9 @@ def list_files(user: dict = Depends(get_current_user)):
             "module_type_id": classification["module_type_id"],
             "module_type_name": classification["module_type_name"],
             "resource_category": classification["resource_category"],
-            "resource_category_label": classification["resource_category_label"]
+            "resource_category_label": classification["resource_category_label"],
+            "folder": classification.get("folder", "resources"),
+            "folder_label": classification.get("folder_label", "მატერიალური რესურსები და სხვა (resources)")
         })
 
     return {
@@ -429,14 +625,29 @@ def download_file(file_id: int, user: dict = Depends(get_current_user)):
     finally:
         conn.close()
 
-    if not row or not os.path.exists(row["file_path"]):
+    if not row:
         raise HTTPException(status_code=404, detail="ფაილი ვერ მოიძებნა")
+
+    file_path = locate_file_path(row["original_name"], row["file_path"])
+    if not file_path or not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="ფაილი ვერ მოიძებნა სერვერზე")
+
+    # განვაახლოთ სწორი მისამართი ბაზაში თუ შეიცვალა
+    if file_path != row["file_path"]:
+        try:
+            conn = get_connection()
+            with conn.cursor() as cur:
+                cur.execute("UPDATE uploaded_files SET file_path = %s WHERE id = %s", (file_path, file_id))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
 
     if user.get("role") == "teacher" and row["user_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="წვდომა შეზღუდულია: მასწავლებელს შეუძლია მხოლოდ საკუთარი რესურსის დათვალიერება")
 
     return FileResponse(
-        path=row["file_path"],
+        path=file_path,
         filename=row["original_name"],
         media_type="application/octet-stream"
     )
@@ -491,6 +702,7 @@ def get_file_module(file_id: int, user: dict = Depends(get_current_user)):
                     pass
 
             ext = os.path.splitext(f_row["original_name"])[1].lower()
+            actual_file_path = locate_file_path(f_row["original_name"], f_row["file_path"])
 
             # 1. Excel-ის მატერიალური რესურსების შემოწმება
             cur.execute("SELECT * FROM material_resources WHERE file_id = %s ORDER BY id ASC", (file_id,))
@@ -501,10 +713,10 @@ def get_file_module(file_id: int, user: dict = Depends(get_current_user)):
             plan_rows = cur.fetchall()
 
             # თუ ჯერ არ არის გაპარსული Excel, ადგილზე დავამუშაოთ
-            if not res_rows and not plan_rows and ext in [".xlsx", ".xls"] and os.path.exists(f_row["file_path"]):
+            if not res_rows and not plan_rows and ext in [".xlsx", ".xls"] and actual_file_path and os.path.exists(actual_file_path):
                 from file_processor import extract_excel_resources, extract_excel_curriculum, save_material_resources_to_db, save_curriculum_plan_to_db
                 import openpyxl
-                wb = openpyxl.load_workbook(f_row["file_path"], data_only=True)
+                wb = openpyxl.load_workbook(actual_file_path, data_only=True)
 
                 is_resources = False
                 for sname in wb.sheetnames:
@@ -518,12 +730,16 @@ def get_file_module(file_id: int, user: dict = Depends(get_current_user)):
                         break
 
                 if is_resources:
-                    res_data = extract_excel_resources(f_row["file_path"])
+                    res_data = extract_excel_resources(actual_file_path)
                     save_material_resources_to_db(conn, file_id, res_data)
                     cur.execute("SELECT * FROM material_resources WHERE file_id = %s ORDER BY id ASC", (file_id,))
                     res_rows = cur.fetchall()
                 else:
-                    curr_data = extract_excel_curriculum(f_row["file_path"])
+                    curr_data = extract_excel_curriculum(actual_file_path)
+                    if curr_data:
+                        save_curriculum_plan_to_db(conn, file_id, curr_data)
+                        cur.execute("SELECT * FROM curriculum_plans WHERE file_id = %s ORDER BY module_order ASC", (file_id,))
+                        plan_rows = cur.fetchall()
                     if curr_data:
                         save_curriculum_plan_to_db(conn, file_id, curr_data)
                         cur.execute("SELECT * FROM curriculum_plans WHERE file_id = %s ORDER BY module_order ASC", (file_id,))
@@ -596,9 +812,9 @@ def get_file_module(file_id: int, user: dict = Depends(get_current_user)):
             cur.execute("SELECT * FROM curriculum_modules WHERE file_id = %s", (file_id,))
             mod = cur.fetchone()
 
-            if not mod and ext in [".docx", ".doc"] and os.path.exists(f_row["file_path"]):
+            if not mod and ext in [".docx", ".doc"] and actual_file_path and os.path.exists(actual_file_path):
                 from file_processor import parse_docx_curriculum, save_module_to_db
-                parsed = parse_docx_curriculum(f_row["file_path"], f_row["original_name"])
+                parsed = parse_docx_curriculum(actual_file_path, f_row["original_name"])
                 if parsed and parsed.get("is_module"):
                     save_module_to_db(conn, file_id, parsed)
                     cur.execute("SELECT * FROM curriculum_modules WHERE file_id = %s", (file_id,))
@@ -606,58 +822,12 @@ def get_file_module(file_id: int, user: dict = Depends(get_current_user)):
 
             # Word-ის ზუსტი სტრუქტურის ამოღება (1:1 ასლისთვის)
             doc_elements = []
-            actual_file_path = None
-            if ext in [".docx", ".doc"]:
-                from urllib.parse import unquote
-                orig = f_row.get("original_name", "")
-                unquoted_orig = unquote(orig)
-                raw_path = f_row.get("file_path", "")
-                base_fname = os.path.basename(raw_path.replace("\\", "/")) if raw_path else ""
-
-                search_dirs = [
-                    UPLOAD_DIR,
-                    os.path.join(BASE_DIR, "uploads"),
-                    os.path.join(BASE_DIR, "..", "uploads"),
-                    "/var/www/calendar.learn/backend/uploads",
-                    "/var/www/calendar.learn/uploads",
-                    os.path.dirname(raw_path) if raw_path else None
-                ]
-
-                possible_paths = [
-                    raw_path,
-                    os.path.abspath(raw_path) if raw_path else None,
-                ]
-
-                for d in search_dirs:
-                    if d and os.path.isdir(d):
-                        possible_paths.extend([
-                            os.path.join(d, orig),
-                            os.path.join(d, unquoted_orig),
-                            os.path.join(d, base_fname),
-                        ])
-
-                for p in possible_paths:
-                    if p and os.path.isfile(p):
-                        actual_file_path = p
-                        break
-
-                # თუ პირდაპირი გზით ვერ იპოვა, მოვძებნოთ საქაღალდეებში სახელის შესაბამისობით
-                if not actual_file_path:
-                    for d in search_dirs:
-                        if d and os.path.isdir(d):
-                            for fname in os.listdir(d):
-                                if fname == orig or fname == unquoted_orig or fname.lower() == orig.lower() or fname.lower() == unquoted_orig.lower():
-                                    actual_file_path = os.path.join(d, fname)
-                                    break
-                            if actual_file_path:
-                                break
-
-                if actual_file_path:
-                    try:
-                        from file_processor import get_exact_doc_structure
-                        doc_elements = get_exact_doc_structure(actual_file_path)
-                    except Exception as e:
-                        logging.error(f"get_exact_doc_structure error on {actual_file_path}: {e}")
+            if ext in [".docx", ".doc"] and actual_file_path:
+                try:
+                    from file_processor import get_exact_doc_structure
+                    doc_elements = get_exact_doc_structure(actual_file_path)
+                except Exception as e:
+                    logging.error(f"get_exact_doc_structure error on {actual_file_path}: {e}")
 
             if mod:
                 cur.execute("""

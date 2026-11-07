@@ -4,7 +4,7 @@ import { api } from '../services/api';
 import { 
   UploadCloud, FileText, Download, Trash2, 
   Eye, X, RefreshCw, FileSpreadsheet, FileCode,
-  Search, Filter, Building2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
+  Search, Filter, Building2, Folder, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from 'lucide-react';
 import DocumentReader from './DocumentReader';
 import { SCHOOL22_LOGO_BASE64 } from './school22_logo';
@@ -44,10 +44,15 @@ export default function FileUpload() {
   const [message, setMessage] = useState(null);
   const fileInputRef = useRef(null);
 
+  // სამიზნე საქაღალდის არჩევა ატვირთვისას ('auto', 'modules', 'plans', 'resources')
+  const [uploadTargetFolder, setUploadTargetFolder] = useState('auto');
+  const [reorganizing, setReorganizing] = useState(false);
+
   // ძებნა, ფილტრაცია და პაგინაცია
   const [searchTerm, setSearchTerm] = useState('');
   const [orgFilter, setOrgFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [folderFilter, setFolderFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -81,6 +86,27 @@ export default function FileUpload() {
     }
   };
 
+  const handleReorganize = async () => {
+    if (!isAdmin) return;
+    try {
+      setReorganizing(true);
+      setMessage(null);
+      const res = await api.reorganizeFiles();
+      setMessage({
+        type: 'success',
+        text: res.message || `საქაღალდეებში გადანაწილდა ${res.moved_count || 0} ფაილი!`
+      });
+      await loadFiles();
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text: err.message || 'ფაილების დალაგება ვერ მოხერხდა'
+      });
+    } finally {
+      setReorganizing(false);
+    }
+  };
+
   const handleFiles = async (selectedFiles) => {
     if (!selectedFiles || selectedFiles.length === 0) return;
 
@@ -92,7 +118,7 @@ export default function FileUpload() {
     try {
       setUploading(true);
       setMessage(null);
-      let res = await api.uploadFiles(selectedFiles, false);
+      let res = await api.uploadFiles(selectedFiles, false, uploadTargetFolder);
 
       if (res && res.conflict) {
         const conflictsStr = res.conflicts ? res.conflicts.join(', ') : 'ფაილები';
@@ -100,7 +126,7 @@ export default function FileUpload() {
           `გაფრთხილება: შემდეგი ფაილი(ები) უკვე არსებობს სერვერზე:\n\n${conflictsStr}\n\nგსურთ მათი გადაწერა?`
         );
         if (confirmOverwrite) {
-          res = await api.uploadFiles(selectedFiles, true);
+          res = await api.uploadFiles(selectedFiles, true, uploadTargetFolder);
           setMessage({ type: 'success', text: `წარმატებით აიტვირთა/გადაეწერა ${res.count || selectedFiles.length} ფაილი!` });
           await loadFiles();
         } else {
@@ -321,6 +347,18 @@ export default function FileUpload() {
       badgeClass = 'doc-tag';
     }
 
+    let folder = f.folder;
+    if (!folder) {
+      if (isWord) folder = 'modules';
+      else if (category === 'plan') folder = 'plans';
+      else folder = 'resources';
+    }
+    const folderLabels = {
+      modules: 'მოდულები (modules/)',
+      plans: 'სასწავლო გეგმები (plans/)',
+      resources: 'მატერიალური რესურსები (resources/)'
+    };
+
     return {
       orgCode,
       orgName,
@@ -328,7 +366,9 @@ export default function FileUpload() {
       moduleTypeId,
       category,
       categoryLabel,
-      badgeClass
+      badgeClass,
+      folder,
+      folderLabel: f.folder_label || folderLabels[folder] || 'სხვა'
     };
   };
 
@@ -338,6 +378,11 @@ export default function FileUpload() {
   const filteredFiles = useMemo(() => {
     return files.filter((f) => {
       const classification = resolveFileClassification(f);
+
+      // საქაღალდის ფილტრი
+      if (folderFilter !== 'all' && classification.folder !== folderFilter) {
+        return false;
+      }
 
       // ორგანიზაციის ფილტრი
       if (orgFilter !== 'all' && classification.orgCode !== orgFilter) {
@@ -394,7 +439,7 @@ export default function FileUpload() {
 
       return true;
     });
-  }, [files, searchTerm, orgFilter, typeFilter, statusFilter]);
+  }, [files, searchTerm, orgFilter, typeFilter, folderFilter, statusFilter]);
 
   // პაგინაციის გამოთვლა
   const totalPages = Math.ceil(filteredFiles.length / pageSize) || 1;
@@ -408,6 +453,11 @@ export default function FileUpload() {
   // ძებნის/ფილტრის ცვლილებისას გვერდის დაბრუნება 1-ზე
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleFolderChange = (e) => {
+    setFolderFilter(e.target.value);
     setCurrentPage(1);
   };
 
@@ -441,9 +491,61 @@ export default function FileUpload() {
       {/* მხოლოდ ადმინისტრატორს აქვს ატვირთვის უფლება */}
       {isAdmin && (
         <div className="upload-card">
-          <div className="upload-card-title">სასწავლო რესურსების ატვირთვა</div>
-          <div className="upload-card-sub">
-            ატვირთეთ პროფესიული ან ინტეგრირებული მოდულები (.docx), Excel ცხრილები ან სხვა სასწავლო მასალები.
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '10px' }}>
+            <div>
+              <div className="upload-card-title">სასწავლო რესურსების ატვირთვა</div>
+              <div className="upload-card-sub" style={{ marginBottom: 0 }}>
+                ატვირთვისას ფაილები თავსდება შესაბამის საქაღალდეებში: <code>uploads/modules/</code>, <code>uploads/plans/</code>, <code>uploads/resources/</code>.
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleReorganize}
+              disabled={reorganizing || loading}
+              className="btn-reorganize"
+              title="სერვერზე არსებული ძველი/არარეორგანიზებული ფაილების ავტომატური დალაგება შესაბამის საქაღალდეებში"
+            >
+              <RefreshCw size={13} className={reorganizing ? 'spin' : ''} />
+              <span>{reorganizing ? 'მიმდინარეობს დალაგება...' : '📁 არსებული ფაილების დალაგება'}</span>
+            </button>
+          </div>
+
+          {/* სამიზნე საქაღალდის არჩევა */}
+          <div style={{ margin: '14px 0 10px 0' }}>
+            <div style={{ fontSize: '12px', fontWeight: '600', color: '#475569', marginBottom: '6px' }}>
+              სამიზნე საქაღალდე სერვერზე:
+            </div>
+            <div className="folder-pill-selector">
+              <button
+                type="button"
+                onClick={() => setUploadTargetFolder('auto')}
+                className={`folder-pill ${uploadTargetFolder === 'auto' ? 'active' : ''}`}
+              >
+                ⚡ ავტომატური განაწილება (მოდულები ➔ modules/, გეგმები ➔ plans/, რესურსები ➔ resources/)
+              </button>
+              <button
+                type="button"
+                onClick={() => setUploadTargetFolder('modules')}
+                className={`folder-pill ${uploadTargetFolder === 'modules' ? 'active' : ''}`}
+              >
+                📘 მოდულები (uploads/modules/)
+              </button>
+              <button
+                type="button"
+                onClick={() => setUploadTargetFolder('plans')}
+                className={`folder-pill ${uploadTargetFolder === 'plans' ? 'active' : ''}`}
+              >
+                📊 სასწავლო გეგმები (uploads/plans/)
+              </button>
+              <button
+                type="button"
+                onClick={() => setUploadTargetFolder('resources')}
+                className={`folder-pill ${uploadTargetFolder === 'resources' ? 'active' : ''}`}
+              >
+                📦 მატერიალური რესურსები და სხვა (uploads/resources/)
+              </button>
+            </div>
           </div>
 
           <div
@@ -526,6 +628,21 @@ export default function FileUpload() {
 
           {/* ფილტრები */}
           <div className="filter-controls">
+            <div className="filter-select-wrapper">
+              <Folder size={14} className="filter-icon" />
+              <select 
+                value={folderFilter} 
+                onChange={handleFolderChange}
+                className="filter-select"
+                title="საქაღალდის ფილტრი"
+              >
+                <option value="all">📁 ყველა საქაღალდე</option>
+                <option value="modules">📘 modules/ (მოდულები)</option>
+                <option value="plans">📊 plans/ (სასწავლო გეგმები)</option>
+                <option value="resources">📦 resources/ (მატერიალური რესურსები და სხვა)</option>
+              </select>
+            </div>
+
             <div className="filter-select-wrapper">
               <Building2 size={14} className="filter-icon" />
               <select 
@@ -642,6 +759,24 @@ export default function FileUpload() {
                                 </span>
                                 <span className={`module-badge-tag ${cls.badgeClass}`}>
                                   {cls.categoryLabel}
+                                </span>
+                                <span 
+                                  className="folder-tag"
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '3px',
+                                    padding: '2px 7px',
+                                    borderRadius: '4px',
+                                    fontSize: '11px',
+                                    fontWeight: '600',
+                                    background: cls.folder === 'modules' ? '#e0e7ff' : cls.folder === 'plans' ? '#dcfce7' : '#fef3c7',
+                                    color: cls.folder === 'modules' ? '#3730a3' : cls.folder === 'plans' ? '#166534' : '#92400e',
+                                    border: `1px solid ${cls.folder === 'modules' ? '#c7d2fe' : cls.folder === 'plans' ? '#bbf7d0' : '#fde68a'}`
+                                  }}
+                                  title={`საქაღალდე სერვერზე: uploads/${cls.folder}/`}
+                                >
+                                  📁 {cls.folder}/
                                 </span>
                               </div>
                             </div>

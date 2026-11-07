@@ -2073,12 +2073,7 @@ export default function CalendarGenerator() {
                 {cell.isLogoCell ? (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px', width: '100%' }}>
                     {isWeaOrg && LETTERHEAD_BASE64 ? (
-                      <>
-                        <img
-                          src={LETTERHEAD_BASE64}
-                          alt="WEA Letterhead"
-                          style={{ maxWidth: '100%', maxHeight: '75px', objectFit: 'contain' }}
-                        />
+                      <>                       
                         <div style={{ fontSize: '8.5pt', fontWeight: 'bold', color: '#18181b', textAlign: 'center', lineHeight: 1.25 }}>
                           {organizationName || 'შპს მსოფლიო განათლების აკადემია (WEA)'}
                         </div>

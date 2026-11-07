@@ -17,7 +17,8 @@ import {
   Clock,
   BookOpen,
   HelpCircle,
-  Edit3
+  Edit3,
+  FileSpreadsheet
 } from 'lucide-react';
 
 // საქართველოს ოფიციალური უქმე დღეები და სასწავლო არდადეგები (2025-2026)

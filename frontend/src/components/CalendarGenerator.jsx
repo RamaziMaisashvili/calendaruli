@@ -18,7 +18,10 @@ import {
   BookOpen,
   HelpCircle,
   Edit3,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Eye,
+  X,
+  Check
 } from 'lucide-react';
 
 // საქართველოს ოფიციალური უქმე დღეები და სასწავლო არდადეგები (2025-2026)
@@ -315,6 +318,7 @@ export default function CalendarGenerator() {
   const [location, setLocation] = useState('');
   const [groupNumber, setGroupNumber] = useState('4/2026');
   const [selectedTemplate, setSelectedTemplate] = useState('template1'); // 'template1' (12-სვეტიანი) | 'template2' (10-სვეტიანი აკადემია)
+  const [previewModalTemplate, setPreviewModalTemplate] = useState(null); // 'template1' | 'template2' | null (წინასწარი დათვალიერების მოდალი)
 
   // თარიღისა და საათების განაწილების პარამეტრები (Schedule Engine)
   const [academicYearStartDate, setAcademicYearStartDate] = useState('2026-09-15');
@@ -1305,11 +1309,11 @@ export default function CalendarGenerator() {
       whiteSpace: 'pre-wrap',
       overflowWrap: 'anywhere',
       verticalAlign: 'middle',
-      padding: '6px',
-      border: '1px solid #52525b',
+      padding: '4px 6px',
+      border: '1px solid #000000',
       fontFamily: 'Sylfaen, serif',
-      fontSize: '10.0pt',
-      color: '#18181b',
+      fontSize: '9.5pt',
+      color: '#000000',
       ...extra,
     });
 
@@ -1836,6 +1840,301 @@ export default function CalendarGenerator() {
     pairMerges,
   ]);
 
+  const renderTemplate1Document = () => (
+    <table
+      className="official-calendar-table"
+      style={{
+        width: '100%',
+        minWidth: '100%',
+        borderCollapse: 'collapse',
+        tableLayout: 'fixed',
+        background: '#ffffff',
+      }}
+    >
+      <colgroup>
+        {officialTableData.widths.map((w, idx) => (
+          <col key={idx} style={{ width: `${(w / totalTableWidth) * 100}%` }} />
+        ))}
+      </colgroup>
+      <tbody>
+        {officialTableData.rows.map((row) => (
+          <tr key={row.number} style={row.height ? { height: row.height } : undefined}>
+            {row.cells.map((cell) => (
+              <td
+                key={cell.column}
+                rowSpan={cell.rowSpan}
+                colSpan={cell.colSpan}
+                style={cell.style}
+              >
+                {cell.isLogoCell ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px' }}>
+                    {organizationCode === '22_skola' && SCHOOL22_LOGO_BASE64 ? (
+                      <img
+                        src={SCHOOL22_LOGO_BASE64}
+                        alt="22 სკოლა"
+                        style={{ maxWidth: '110px', maxHeight: '110px', objectFit: 'contain' }}
+                      />
+                    ) : (
+                      <div style={{ fontSize: '10pt', fontWeight: 'bold', color: '#18181b', textAlign: 'center' }}>
+                        {organizationName}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  cell.text
+                )}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+
+  const renderTemplate2Document = () => (
+    <div
+      className="academy-print-wrapper"
+      style={{
+        width: '100%',
+        maxWidth: '1040px',
+        margin: '0 auto',
+        fontFamily: "'Sylfaen', serif",
+        color: '#000000',
+        fontSize: '10.5pt',
+        background: '#ffffff',
+        padding: '6px',
+      }}
+    >
+      {/* დანართი 1 დამტკიცების ბლოკი */}
+      <div style={{ textAlign: 'right', fontSize: '9pt', lineHeight: 1.35, marginBottom: '14pt' }}>
+        <div>დანართი 1</div>
+        <div>დამტკიცებულია შპს ,,მსოფლიო განათლების აკადემია“ </div>
+        <div>დირექტორის  2023 წლის 13 დეკემბრის N037 ბრძანებით</div>
+      </div>
+
+      <div style={{ textAlign: 'center', fontSize: '12pt', fontWeight: 'bold', marginBottom: '12pt' }}>
+        კალენდარული გეგმა
+      </div>
+
+      {/* მეტამონაცემების სია */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8pt', fontSize: '10.5pt', fontWeight: 'bold', marginBottom: '16pt', lineHeight: 1.35 }}>
+        <div>პროფესიული საგანმანათლებლო დაწესებულების სახელწოდება: შპს  ,,მსოფლიო განათლების აკადემია“</div>
+        <div>საგანმანათლებლო პროგრამის სახელწოდება:  {programName}</div>
+        <div>მოდულის სახელწოდება და სარეგისტრაციო ნომერი: {moduleTitle} {registrationNumber ? `(${registrationNumber})` : ''}</div>
+        <div>მოდულის განხორციელების პერიოდი:   დაწყება:  {formatDateGeo(academyTableData.firstDateIso)}წ.          დასრულება: {formatDateGeo(academyTableData.lastSessionDateIso)}წ.</div>
+        <div>მოდულის კრედიტებისა და საათების რაოდენობა:  {credits || '—'}კრ.-{academyTableData.totalHours}სთ.</div>
+        <div>საათების განაწილება მოდულის მიხედვით: საკონტაქტო საათები-{grandTotalContact}სთ.  დამოუკიდებელი მუშაობის საათები-{grandTotalIndependent}სთ.</div>
+        <div>პროფესიული მასწავლებელი:  {teacherName}</div>
+        <div>ჯგუფის №: {groupNumber || '4/2026'}</div>
+      </div>
+
+      {/* 10-სვეტიანი ცხრილი */}
+      <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed', border: '0.5pt solid #000000' }}>
+        <colgroup>
+          <col style={{ width: '5.5%' }} />
+          <col style={{ width: '8.5%' }} />
+          <col style={{ width: '26%' }} />
+          <col style={{ width: '4.5%' }} />
+          <col style={{ width: '4.5%' }} />
+          <col style={{ width: '4.5%' }} />
+          <col style={{ width: '13.5%' }} />
+          <col style={{ width: '13%' }} />
+          <col style={{ width: '11%' }} />
+          <col style={{ width: '9%' }} />
+        </colgroup>
+        <thead>
+          <tr style={{ height: '37.3pt' }}>
+            <th rowSpan={2} style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
+              კვირის №
+            </th>
+            <th rowSpan={2} style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
+              თარიღი
+            </th>
+            <th rowSpan={2} style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
+              თემატიკა
+            </th>
+            <th colSpan={3} style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
+              სასწავლო დატვირთვის ტიპი
+            </th>
+            <th colSpan={2} style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
+              მეთოდი
+            </th>
+            <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
+              საჭირო რესურსები
+            </th>
+            <th rowSpan={2} style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
+              შენიშვნა
+            </th>
+          </tr>
+          <tr style={{ height: '100.75pt' }}>
+            <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', padding: '2pt 0' }}>
+              <div style={{ display: 'inline-block', writingMode: 'vertical-rl', transform: 'rotate(180deg)', maxHeight: '96pt', fontWeight: 'bold', fontSize: '10pt', whiteSpace: 'nowrap' }}>
+                საკონტაქტო  საათები
+              </div>
+            </th>
+            <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', padding: '2pt 0' }}>
+              <div style={{ display: 'inline-block', writingMode: 'vertical-rl', transform: 'rotate(180deg)', maxHeight: '96pt', fontWeight: 'bold', fontSize: '10pt', whiteSpace: 'nowrap' }}>
+                დამოუკიდებელი
+              </div>
+            </th>
+            <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', padding: '2pt 0' }}>
+              <div style={{ display: 'inline-block', writingMode: 'vertical-rl', transform: 'rotate(180deg)', maxHeight: '96pt', fontWeight: 'bold', fontSize: '10pt', whiteSpace: 'nowrap' }}>
+                შეფასება
+              </div>
+            </th>
+            <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
+              სწავლების მეთოდი
+            </th>
+            <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
+              განმსაზღვრელი შეფასების მეთოდი
+            </th>
+            <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', padding: '2pt 4pt' }}>
+              &nbsp;
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {academyTableData.rows.map((row, rIdx) => (
+            <tr key={rIdx}>
+              {row.cells.map((cell, cIdx) => (
+                <td key={cIdx} style={cell.style}>
+                  {cell.text}
+                </td>
+              ))}
+            </tr>
+          ))}
+
+          {/* სულ საათების რაოდენობა (#8DB3E2) */}
+          <tr style={{ height: '22pt' }}>
+            <td colSpan={3} style={{ border: '0.5pt solid #000', background: '#8DB3E2', fontWeight: 'bold', padding: '4pt 6pt', fontSize: '10.5pt' }}>
+              სულ საათების რაოდენობა
+            </td>
+            <td style={{ border: '0.5pt solid #000', background: '#8DB3E2', fontWeight: 'bold', textAlign: 'center', padding: '4pt 2pt', fontSize: '10.5pt' }}>
+              {grandTotalContact}
+            </td>
+            <td style={{ border: '0.5pt solid #000', background: '#8DB3E2', fontWeight: 'bold', textAlign: 'center', padding: '4pt 2pt', fontSize: '10.5pt' }}>
+              {grandTotalIndependent}
+            </td>
+            <td style={{ border: '0.5pt solid #000', background: '#8DB3E2', fontWeight: 'bold', textAlign: 'center', padding: '4pt 2pt', fontSize: '10.5pt' }}>
+              {grandTotalEvaluation}
+            </td>
+            <td colSpan={4} style={{ border: '0.5pt solid #000', background: '#8DB3E2', fontWeight: 'bold', textAlign: 'center', padding: '4pt 6pt', fontSize: '10.5pt' }}>
+              {academyTableData.totalHours}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* ხელმოწერა და შეთანხმება */}
+      <div style={{ marginTop: '22pt', fontSize: '10.5pt', fontWeight: 'bold', lineHeight: 1.8 }}>
+        <div>შეთანხმებულია:     </div>
+        <div>სასწავლო  პროცესის   მართვის სამსახურის უფროსი:                                   /დ.გაგუა/</div>
+        <div>თარიღი: ----------------------------</div>
+      </div>
+    </div>
+  );
+
+  const handlePrintDocument = () => {
+    const printableEl = document.getElementById('printable-official-calendar');
+    if (!printableEl) {
+      window.print();
+      return;
+    }
+
+    let printIframe = document.getElementById('calendar-print-iframe');
+    if (!printIframe) {
+      printIframe = document.createElement('iframe');
+      printIframe.id = 'calendar-print-iframe';
+      printIframe.style.position = 'fixed';
+      printIframe.style.top = '-10000px';
+      printIframe.style.left = '-10000px';
+      printIframe.style.width = '1200px';
+      printIframe.style.height = '900px';
+      printIframe.style.border = 'none';
+      document.body.appendChild(printIframe);
+    }
+
+    const priDoc = printIframe.contentWindow.document;
+    priDoc.open();
+    priDoc.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${moduleTitle || 'კალენდარული გეგმა'}</title>
+        <style>
+          @page {
+            size: A4 landscape;
+            margin: 6mm 8mm;
+          }
+          * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          html, body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            font-family: 'Sylfaen', serif;
+            color: #000000;
+          }
+          div {
+            zoom: 1 !important;
+            transform: none !important;
+          }
+          .official-calendar-table {
+            width: 100% !important;
+            max-width: 100% !important;
+            border-collapse: collapse !important;
+            table-layout: fixed !important;
+          }
+          .academy-print-wrapper {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          table {
+            width: 100% !important;
+            max-width: 100% !important;
+            border-collapse: collapse !important;
+            table-layout: fixed !important;
+            page-break-inside: auto;
+          }
+          tr {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          thead {
+            display: table-header-group;
+          }
+          tfoot {
+            display: table-footer-group;
+          }
+          td, th {
+            overflow-wrap: anywhere;
+            word-break: break-word;
+          }
+        </style>
+      </head>
+      <body>
+        ${printableEl.innerHTML}
+      </body>
+      </html>
+    `);
+    priDoc.close();
+
+    setTimeout(() => {
+      try {
+        printIframe.contentWindow.focus();
+        printIframe.contentWindow.print();
+      } catch {
+        window.print();
+      }
+    }, 250);
+  };
+
   const handleSaveCalendarToDb = async () => {
     setSaving(true);
     setError('');
@@ -1953,28 +2252,73 @@ export default function CalendarGenerator() {
     <div className="calendar-generator-root">
       <style>{`
         @media print {
-          body * {
-            visibility: hidden;
+          @page {
+            size: A4 landscape;
+            margin: 6mm 8mm;
           }
-          #printable-official-calendar,
-          #printable-official-calendar * {
-            visibility: visible;
+          html, body, #root, .app-container, .main-wrapper, .content-area, .content-max, .calendar-generator-root {
+            overflow: visible !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            display: block !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          .sidebar,
+          .header,
+          .no-print,
+          nav,
+          header,
+          button {
+            display: none !important;
           }
           #printable-official-calendar {
-            position: absolute;
-            left: 0;
-            top: 0;
+            display: block !important;
+            position: static !important;
+            overflow: visible !important;
             width: 100% !important;
+            max-width: 100% !important;
             margin: 0 !important;
             padding: 0 !important;
             box-shadow: none !important;
+            border: none !important;
           }
-          .no-print {
-            display: none !important;
+          #printable-official-calendar > div {
+            zoom: 1 !important;
+            transform: none !important;
+            width: 100% !important;
           }
-          @page {
-            size: A4 landscape;
-            margin: 8mm;
+          .official-calendar-table {
+            width: 100% !important;
+            max-width: 100% !important;
+            table-layout: fixed !important;
+            border-collapse: collapse !important;
+          }
+          .academy-print-wrapper {
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          table {
+            width: 100% !important;
+            max-width: 100% !important;
+            table-layout: fixed !important;
+            page-break-inside: auto !important;
+          }
+          tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          thead {
+            display: table-header-group !important;
+          }
+          tfoot {
+            display: table-footer-group !important;
           }
         }
       `}</style>
@@ -2094,59 +2438,178 @@ export default function CalendarGenerator() {
             <p style={{ margin: '0 0 14px 0', fontSize: '13px', color: '#64748b' }}>
               შეგიძლიათ აირჩიოთ სასურველი ფორმატი. არჩევანი შენარჩუნდება ბაზაში შენახვისას და მისი შეცვლა ნებისმიერ დროს შეგიძლიათ:
             </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '16px' }}>
               <div
                 onClick={() => setSelectedTemplate('template1')}
                 style={{
-                  padding: '16px',
+                  padding: '18px',
                   borderRadius: '12px',
                   border: selectedTemplate === 'template1' ? '2px solid #2563eb' : '1px solid #cbd5e1',
                   background: selectedTemplate === 'template1' ? '#eff6ff' : '#ffffff',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
-                  position: 'relative',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <div style={{ fontWeight: 700, fontSize: '14.5px', color: selectedTemplate === 'template1' ? '#1d4ed8' : '#1e293b' }}>
-                    📄 ფორმა 1: კლასიკური (12-სვეტიანი)
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ fontWeight: 700, fontSize: '15px', color: selectedTemplate === 'template1' ? '#1d4ed8' : '#1e293b' }}>
+                      📄 ფორმა 1: კლასიკური (12-სვეტიანი)
+                    </div>
+                    {selectedTemplate === 'template1' ? (
+                      <span style={{ background: '#2563eb', color: '#fff', fontSize: '11px', fontWeight: 700, padding: '3px 9px', borderRadius: '999px' }}>
+                        არჩეულია
+                      </span>
+                    ) : (
+                      <span style={{ background: '#f1f5f9', color: '#64748b', fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '6px' }}>
+                        დააწკაპეთ ასარჩევად
+                      </span>
+                    )}
                   </div>
-                  {selectedTemplate === 'template1' && (
-                    <span style={{ background: '#2563eb', color: '#fff', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '999px' }}>
-                      აქტიური
-                    </span>
-                  )}
+                  <p style={{ margin: '0 0 10px 0', fontSize: '12.5px', color: '#475569', lineHeight: 1.45 }}>
+                    საჯარო სკოლების ოფიციალური სტანდარტი (სსიპ N 22 სკოლა): ლოგოტიპი, 12 სვეტი (თარიღი, კვირა, თემატიკა, კრიტერიუმები, საათები, მეთოდები, განმავითარებელი/განმსაზღვრელი შეფასება, რესურსები, შენიშვნა).
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
+                    <span style={{ background: '#e0e7ff', color: '#3730a3', fontSize: '11px', padding: '2px 7px', borderRadius: '4px', fontWeight: 600 }}>12 სვეტი</span>
+                    <span style={{ background: '#e0e7ff', color: '#3730a3', fontSize: '11px', padding: '2px 7px', borderRadius: '4px' }}>ლოგოტიპი</span>
+                    <span style={{ background: '#e0e7ff', color: '#3730a3', fontSize: '11px', padding: '2px 7px', borderRadius: '4px' }}>განმავითარებელი & განმსაზღვრელი</span>
+                    <span style={{ background: '#e0e7ff', color: '#3730a3', fontSize: '11px', padding: '2px 7px', borderRadius: '4px' }}>ჯამი & სულ ჯამი</span>
+                  </div>
                 </div>
-                <p style={{ margin: 0, fontSize: '12.5px', color: '#475569', lineHeight: 1.45 }}>
-                  საჯარო სკოლების ოფიციალური სტანდარტი (სსიპ N 22 სკოლა): ლოგოტიპი, 12 სვეტი (თარიღი, კვირა, თემატიკა, კრიტერიუმები, საათები, მეთოდები, განმავითარებელი/განმსაზღვრელი შეფასება, რესურსები, შენიშვნა).
-                </p>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPreviewModalTemplate('template1');
+                    }}
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      background: '#ffffff',
+                      color: '#1e293b',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                    }}
+                  >
+                    <Eye size={15} color="#2563eb" />
+                    <span>წინასწარი დათვალიერება</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTemplate('template1')}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: selectedTemplate === 'template1' ? '#2563eb' : '#f1f5f9',
+                      color: selectedTemplate === 'template1' ? '#ffffff' : '#475569',
+                      fontSize: '12.5px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {selectedTemplate === 'template1' ? '✓ არჩეულია' : 'არჩევა'}
+                  </button>
+                </div>
               </div>
 
               <div
                 onClick={() => setSelectedTemplate('template2')}
                 style={{
-                  padding: '16px',
+                  padding: '18px',
                   borderRadius: '12px',
                   border: selectedTemplate === 'template2' ? '2px solid #2563eb' : '1px solid #cbd5e1',
                   background: selectedTemplate === 'template2' ? '#eff6ff' : '#ffffff',
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
-                  position: 'relative',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <div style={{ fontWeight: 700, fontSize: '14.5px', color: selectedTemplate === 'template2' ? '#1d4ed8' : '#1e293b' }}>
-                    📑 ფორმა 2: აკადემია (10-სვეტიანი — დანართი 1)
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ fontWeight: 700, fontSize: '15px', color: selectedTemplate === 'template2' ? '#1d4ed8' : '#1e293b' }}>
+                      📑 ფორმა 2: აკადემია (10-სვეტიანი — დანართი 1)
+                    </div>
+                    {selectedTemplate === 'template2' ? (
+                      <span style={{ background: '#2563eb', color: '#fff', fontSize: '11px', fontWeight: 700, padding: '3px 9px', borderRadius: '999px' }}>
+                        არჩეულია
+                      </span>
+                    ) : (
+                      <span style={{ background: '#f1f5f9', color: '#64748b', fontSize: '11px', fontWeight: 600, padding: '3px 8px', borderRadius: '6px' }}>
+                        დააწკაპეთ ასარჩევად
+                      </span>
+                    )}
                   </div>
-                  {selectedTemplate === 'template2' && (
-                    <span style={{ background: '#2563eb', color: '#fff', fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '999px' }}>
-                      აქტიური
-                    </span>
-                  )}
+                  <p style={{ margin: '0 0 10px 0', fontSize: '12.5px', color: '#475569', lineHeight: 1.45 }}>
+                    შპს „მსოფლიო განათლების აკადემია“ (N037 ბრძანება): 10 სვეტი, ვერტიკალური საათების სათაურები, იისფერი (#CCC0D9) შედეგების ჯამი, ლურჯი (#8DB3E2) სულ საათების ჯამი, ჯგუფის № და დირექციის შეთანხმება.
+                  </p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
+                    <span style={{ background: '#f3e8ff', color: '#6b21a8', fontSize: '11px', padding: '2px 7px', borderRadius: '4px', fontWeight: 600 }}>10 სვეტი</span>
+                    <span style={{ background: '#f3e8ff', color: '#6b21a8', fontSize: '11px', padding: '2px 7px', borderRadius: '4px' }}>დანართი 1</span>
+                    <span style={{ background: '#f3e8ff', color: '#6b21a8', fontSize: '11px', padding: '2px 7px', borderRadius: '4px' }}>ვერტიკალური სათაურები</span>
+                    <span style={{ background: '#f3e8ff', color: '#6b21a8', fontSize: '11px', padding: '2px 7px', borderRadius: '4px' }}>ფერადი ჯამები</span>
+                    <span style={{ background: '#f3e8ff', color: '#6b21a8', fontSize: '11px', padding: '2px 7px', borderRadius: '4px' }}>ჯგუფის №</span>
+                  </div>
                 </div>
-                <p style={{ margin: 0, fontSize: '12.5px', color: '#475569', lineHeight: 1.45 }}>
-                  შპს „მსოფლიო განათლების აკადემია“ (N037 ბრძანება): 10 სვეტი, ვერტიკალური საათების სათაურები, იისფერი (#CCC0D9) შედეგების ჯამი, ლურჯი (#8DB3E2) სულ საათების ჯამი, ჯგუფის № და დირექციის შეთანხმება.
-                </p>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingTop: '10px', borderTop: '1px solid #e2e8f0' }}>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPreviewModalTemplate('template2');
+                    }}
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      padding: '8px 12px',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      background: '#ffffff',
+                      color: '#1e293b',
+                      fontSize: '12.5px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                    }}
+                  >
+                    <Eye size={15} color="#2563eb" />
+                    <span>წინასწარი დათვალიერება</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedTemplate('template2')}
+                    style={{
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      background: selectedTemplate === 'template2' ? '#2563eb' : '#f1f5f9',
+                      color: selectedTemplate === 'template2' ? '#ffffff' : '#475569',
+                      fontSize: '12.5px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {selectedTemplate === 'template2' ? '✓ არჩეულია' : 'არჩევა'}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -3760,7 +4223,7 @@ export default function CalendarGenerator() {
               </button>
 
               <button
-                onClick={() => window.print()}
+                onClick={handlePrintDocument}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -3793,184 +4256,178 @@ export default function CalendarGenerator() {
             }}
           >
             <div style={{ zoom: `${zoomLevel}%` }}>
-              {selectedTemplate === 'template1' ? (
-                <table
-                  style={{
-                    width: `${totalTableWidth}px`,
-                    minWidth: '100%',
-                    borderCollapse: 'collapse',
-                    tableLayout: 'fixed',
-                    background: '#ffffff',
-                  }}
-                >
-                  <colgroup>
-                    {officialTableData.widths.map((w, idx) => (
-                      <col key={idx} style={{ width: `${(w / totalTableWidth) * 100}%` }} />
-                    ))}
-                  </colgroup>
-                  <tbody>
-                    {officialTableData.rows.map((row) => (
-                      <tr key={row.number} style={row.height ? { height: row.height } : undefined}>
-                        {row.cells.map((cell) => (
-                          <td
-                            key={cell.column}
-                            rowSpan={cell.rowSpan}
-                            colSpan={cell.colSpan}
-                            style={cell.style}
-                          >
-                            {cell.isLogoCell ? (
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px' }}>
-                                {organizationCode === '22_skola' && SCHOOL22_LOGO_BASE64 ? (
-                                  <img
-                                    src={SCHOOL22_LOGO_BASE64}
-                                    alt="22 სკოლა"
-                                    style={{ maxWidth: '110px', maxHeight: '110px', objectFit: 'contain' }}
-                                  />
-                                ) : (
-                                  <div style={{ fontSize: '10pt', fontWeight: 'bold', color: '#18181b', textAlign: 'center' }}>
-                                    {organizationName}
-                                  </div>
-                                )}
-                              </div>
-                            ) : (
-                              cell.text
-                            )}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div style={{ width: '966px', margin: '0 auto', fontFamily: "'Sylfaen', serif", color: '#000000', fontSize: '11pt', background: '#ffffff', padding: '10px' }}>
-                  {/* დანართი 1 დამტკიცების ბლოკი */}
-                  <div style={{ textAlign: 'right', fontSize: '9pt', lineHeight: 1.35, marginBottom: '14pt' }}>
-                    <div>დანართი 1</div>
-                    <div>დამტკიცებულია შპს ,,მსოფლიო განათლების აკადემია“ </div>
-                    <div>დირექტორის  2023 წლის 13 დეკემბრის N037 ბრძანებით</div>
+              {selectedTemplate === 'template1' ? renderTemplate1Document() : renderTemplate2Document()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================
+          ფორმის წინასწარი დათვალიერების მოდალური ფანჯარა (Preview Modal)
+      ======================================================================== */}
+      {previewModalTemplate && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(3px)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+          onClick={() => setPreviewModalTemplate(null)}
+        >
+          <div
+            style={{
+              background: '#ffffff',
+              borderRadius: '16px',
+              width: '100%',
+              maxWidth: '1240px',
+              maxHeight: '92vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              overflow: 'hidden',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '16px 24px',
+                background: '#0f172a',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <Eye size={20} color="#60a5fa" />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '16px' }}>
+                    ფორმის წინასწარი დათვალიერება
                   </div>
-
-                  <div style={{ textAlign: 'center', fontSize: '12pt', fontWeight: 'bold', marginBottom: '12pt' }}>
-                    კალენდარული გეგმა
-                  </div>
-
-                  {/* მეტამონაცემების სია */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8pt', fontSize: '10.5pt', fontWeight: 'bold', marginBottom: '16pt', lineHeight: 1.35 }}>
-                    <div>პროფესიული საგანმანათლებლო დაწესებულების სახელწოდება: შპს  ,,მსოფლიო განათლების აკადემია“</div>
-                    <div>საგანმანათლებლო პროგრამის სახელწოდება:  {programName}</div>
-                    <div>მოდულის სახელწოდება და სარეგისტრაციო ნომერი: {moduleTitle} {registrationNumber ? `(${registrationNumber})` : ''}</div>
-                    <div>მოდულის განხორციელების პერიოდი:   დაწყება:  {formatDateGeo(academyTableData.firstDateIso)}წ.          დასრულება: {formatDateGeo(academyTableData.lastSessionDateIso)}წ.</div>
-                    <div>მოდულის კრედიტებისა და საათების რაოდენობა:  {credits || '—'}კრ.-{academyTableData.totalHours}სთ.</div>
-                    <div>საათების განაწილება მოდულის მიხედვით: საკონტაქტო საათები-{grandTotalContact}სთ.  დამოუკიდებელი მუშაობის საათები-{grandTotalIndependent}სთ.</div>
-                    <div>პროფესიული მასწავლებელი:  {teacherName}</div>
-                    <div>ჯგუფის №: {groupNumber || '4/2026'}</div>
-                  </div>
-
-                  {/* 10-სვეტიანი ცხრილი */}
-                  <table style={{ borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed', border: '0.5pt solid #000000' }}>
-                    <colgroup>
-                      <col style={{ width: '5.5%' }} />
-                      <col style={{ width: '8.5%' }} />
-                      <col style={{ width: '26%' }} />
-                      <col style={{ width: '4.5%' }} />
-                      <col style={{ width: '4.5%' }} />
-                      <col style={{ width: '4.5%' }} />
-                      <col style={{ width: '13.5%' }} />
-                      <col style={{ width: '13%' }} />
-                      <col style={{ width: '11%' }} />
-                      <col style={{ width: '9%' }} />
-                    </colgroup>
-                    <thead>
-                      <tr style={{ height: '37.3pt' }}>
-                        <th rowSpan={2} style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
-                          კვირის №
-                        </th>
-                        <th rowSpan={2} style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
-                          თარიღი
-                        </th>
-                        <th rowSpan={2} style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
-                          თემატიკა
-                        </th>
-                        <th colSpan={3} style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
-                          სასწავლო დატვირთვის ტიპი
-                        </th>
-                        <th colSpan={2} style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
-                          მეთოდი
-                        </th>
-                        <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
-                          საჭირო რესურსები
-                        </th>
-                        <th rowSpan={2} style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
-                          შენიშვნა
-                        </th>
-                      </tr>
-                      <tr style={{ height: '100.75pt' }}>
-                        <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', padding: '2pt 0' }}>
-                          <div style={{ display: 'inline-block', writingMode: 'vertical-rl', transform: 'rotate(180deg)', maxHeight: '96pt', fontWeight: 'bold', fontSize: '10pt', whiteSpace: 'nowrap' }}>
-                            საკონტაქტო  საათები
-                          </div>
-                        </th>
-                        <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', padding: '2pt 0' }}>
-                          <div style={{ display: 'inline-block', writingMode: 'vertical-rl', transform: 'rotate(180deg)', maxHeight: '96pt', fontWeight: 'bold', fontSize: '10pt', whiteSpace: 'nowrap' }}>
-                            დამოუკიდებელი
-                          </div>
-                        </th>
-                        <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', padding: '2pt 0' }}>
-                          <div style={{ display: 'inline-block', writingMode: 'vertical-rl', transform: 'rotate(180deg)', maxHeight: '96pt', fontWeight: 'bold', fontSize: '10pt', whiteSpace: 'nowrap' }}>
-                            შეფასება
-                          </div>
-                        </th>
-                        <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
-                          სწავლების მეთოდი
-                        </th>
-                        <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', padding: '2pt 4pt' }}>
-                          განმსაზღვრელი შეფასების მეთოდი
-                        </th>
-                        <th style={{ border: '0.5pt solid #000', verticalAlign: 'middle', textAlign: 'center', padding: '2pt 4pt' }}>
-                          &nbsp;
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {academyTableData.rows.map((row, rIdx) => (
-                        <tr key={rIdx}>
-                          {row.cells.map((cell, cIdx) => (
-                            <td key={cIdx} style={cell.style}>
-                              {cell.text}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-
-                      {/* სულ საათების რაოდენობა (#8DB3E2) */}
-                      <tr style={{ height: '22pt' }}>
-                        <td colSpan={3} style={{ border: '0.5pt solid #000', background: '#8DB3E2', fontWeight: 'bold', padding: '4pt 6pt', fontSize: '10.5pt' }}>
-                          სულ საათების რაოდენობა
-                        </td>
-                        <td style={{ border: '0.5pt solid #000', background: '#8DB3E2', fontWeight: 'bold', textAlign: 'center', padding: '4pt 2pt', fontSize: '10.5pt' }}>
-                          {grandTotalContact}
-                        </td>
-                        <td style={{ border: '0.5pt solid #000', background: '#8DB3E2', fontWeight: 'bold', textAlign: 'center', padding: '4pt 2pt', fontSize: '10.5pt' }}>
-                          {grandTotalIndependent}
-                        </td>
-                        <td style={{ border: '0.5pt solid #000', background: '#8DB3E2', fontWeight: 'bold', textAlign: 'center', padding: '4pt 2pt', fontSize: '10.5pt' }}>
-                          {grandTotalEvaluation}
-                        </td>
-                        <td colSpan={4} style={{ border: '0.5pt solid #000', background: '#8DB3E2', fontWeight: 'bold', textAlign: 'center', padding: '4pt 6pt', fontSize: '10.5pt' }}>
-                          {academyTableData.totalHours}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-
-                  {/* ხელმოწერა და შეთანხმება */}
-                  <div style={{ marginTop: '22pt', fontSize: '10.5pt', fontWeight: 'bold', lineHeight: 1.8 }}>
-                    <div>შეთანხმებულია:     </div>
-                    <div>სასწავლო  პროცესის   მართვის სამსახურის უფროსი:                                   /დ.გაგუა/</div>
-                    <div>თარიღი: ----------------------------</div>
+                  <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+                    {previewModalTemplate === 'template1'
+                      ? 'ფორმა 1: კლასიკური 12-სვეტიანი ფორმა (საჯარო სკოლების სტანდარტი)'
+                      : 'ფორმა 2: აკადემიის 10-სვეტიანი ფორმა (შპს მსოფლიო განათლების აკადემია — დანართი 1)'}
                   </div>
                 </div>
-              )}
+              </div>
+
+              {/* Switcher & Action buttons */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', background: '#1e293b', padding: '3px', borderRadius: '8px', border: '1px solid #334155' }}>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewModalTemplate('template1')}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: previewModalTemplate === 'template1' ? '#2563eb' : 'transparent',
+                      color: '#ffffff',
+                      fontWeight: 700,
+                      fontSize: '12.5px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    📄 ფორმა 1 (12 სვეტი)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewModalTemplate('template2')}
+                    style={{
+                      padding: '6px 14px',
+                      borderRadius: '6px',
+                      border: 'none',
+                      background: previewModalTemplate === 'template2' ? '#2563eb' : 'transparent',
+                      color: '#ffffff',
+                      fontWeight: 700,
+                      fontSize: '12.5px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    📑 ფორმა 2 (10 სვეტი)
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTemplate(previewModalTemplate);
+                    setPreviewModalTemplate(null);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: '#16a34a',
+                    color: '#ffffff',
+                    fontWeight: 700,
+                    fontSize: '13px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Check size={16} />
+                  <span>ამ ფორმის არჩევა</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPreviewModalTemplate(null)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#94a3b8',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <X size={22} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                background: '#f1f5f9',
+                padding: '24px',
+                display: 'flex',
+                justifyContent: 'center',
+              }}
+            >
+              <div
+                style={{
+                  background: '#ffffff',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+                  borderRadius: '6px',
+                  padding: '24px',
+                  width: '100%',
+                  overflowX: 'auto',
+                }}
+              >
+                {previewModalTemplate === 'template1' ? renderTemplate1Document() : renderTemplate2Document()}
+              </div>
             </div>
           </div>
         </div>

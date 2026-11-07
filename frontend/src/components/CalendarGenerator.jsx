@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
 import { SCHOOL22_LOGO_BASE64 } from './school22_logo';
+import { LETTERHEAD_BASE64 } from './letterhead';
 import {
   Calendar,
   AlertTriangle,
@@ -2030,7 +2031,20 @@ export default function CalendarGenerator() {
     pairMerges,
   ]);
 
-  const renderTemplate1Document = () => (
+  const renderTemplate1Document = () => {
+    const isWeaOrg =
+      organizationCode === 'wea' ||
+      (organizationName || '').toLowerCase().includes('აკადემი') ||
+      (organizationName || '').toLowerCase().includes('მსოფლიო') ||
+      (programName || '').toLowerCase().includes('front-end');
+
+    const is22Org =
+      !isWeaOrg &&
+      (organizationCode === '22_skola' ||
+        (organizationName || '').includes('22') ||
+        (programName || '').toLowerCase().includes('ქსელ'));
+
+    return (
     <table
       className="official-calendar-table"
       style={{
@@ -2057,13 +2071,29 @@ export default function CalendarGenerator() {
                 style={cell.style}
               >
                 {cell.isLogoCell ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '8px' }}>
-                    {organizationCode === '22_skola' && SCHOOL22_LOGO_BASE64 ? (
-                      <img
-                        src={SCHOOL22_LOGO_BASE64}
-                        alt="22 სკოლა"
-                        style={{ maxWidth: '110px', maxHeight: '110px', objectFit: 'contain' }}
-                      />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px', padding: '6px', width: '100%' }}>
+                    {isWeaOrg && LETTERHEAD_BASE64 ? (
+                      <>
+                        <img
+                          src={LETTERHEAD_BASE64}
+                          alt="WEA Letterhead"
+                          style={{ maxWidth: '100%', maxHeight: '75px', objectFit: 'contain' }}
+                        />
+                        <div style={{ fontSize: '8.5pt', fontWeight: 'bold', color: '#18181b', textAlign: 'center', lineHeight: 1.25 }}>
+                          {organizationName || 'შპს მსოფლიო განათლების აკადემია (WEA)'}
+                        </div>
+                      </>
+                    ) : (is22Org || (!isWeaOrg && SCHOOL22_LOGO_BASE64)) ? (
+                      <>
+                        <img
+                          src={SCHOOL22_LOGO_BASE64}
+                          alt="22 სკოლა"
+                          style={{ maxWidth: '95px', maxHeight: '95px', objectFit: 'contain' }}
+                        />
+                        <div style={{ fontSize: '8.5pt', fontWeight: 'bold', color: '#18181b', textAlign: 'center', lineHeight: 1.25 }}>
+                          {organizationName || 'სსიპ ქალაქ ქუთაისის N 22 საჯარო სკოლა'}
+                        </div>
+                      </>
                     ) : (
                       <div style={{ fontSize: '10pt', fontWeight: 'bold', color: '#18181b', textAlign: 'center' }}>
                         {organizationName}
@@ -2080,6 +2110,7 @@ export default function CalendarGenerator() {
       </tbody>
     </table>
   );
+  };
 
   const renderTemplate2Document = () => (
     <div
@@ -2095,6 +2126,17 @@ export default function CalendarGenerator() {
         padding: '6px',
       }}
     >
+      {/* WEA-ს ოფიციალური ბანერი / ლოგო */}
+      {LETTERHEAD_BASE64 && (
+        <div style={{ width: '100%', marginBottom: '14pt', textAlign: 'center' }}>
+          <img
+            src={LETTERHEAD_BASE64}
+            alt="შპს მსოფლიო განათლების აკადემია (WEA)"
+            style={{ width: '100%', maxHeight: '75pt', objectFit: 'contain' }}
+          />
+        </div>
+      )}
+
       {/* დანართი 1 დამტკიცების ბლოკი */}
       <div style={{ textAlign: 'right', fontSize: '9pt', lineHeight: 1.35, marginBottom: '14pt' }}>
         <div>დანართი 1</div>

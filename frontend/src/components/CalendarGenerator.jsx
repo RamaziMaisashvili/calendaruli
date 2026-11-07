@@ -386,6 +386,8 @@ export default function CalendarGenerator() {
   // ნაბიჯი 4: შეფასებების გაერთიანების კონფიგურაცია
   const [evaluationMode, setEvaluationMode] = useState('merge_matching_pairs');
   const [pairMerges, setPairMerges] = useState({});
+  const [includeCriteriaInTable, setIncludeCriteriaInTable] = useState(false);
+  const [showAllWordFiles, setShowAllWordFiles] = useState(false);
 
   // ნაბიჯი 5: შენახვა / მასშტაბი
   const [currentSavedId, setCurrentSavedId] = useState(null);
@@ -493,9 +495,13 @@ export default function CalendarGenerator() {
       setDbPlans(flatPlans);
       setDbResources(flatResources);
 
-      // პირველი სასწავლო გეგმისა და მისი პირველი მოდულის არჩევა
+      // პირველი სასწავლო გეგმისა და მისი პირველი მოდულის არჩევა (პრიორიტეტი WEA-ს გეგმას)
       if (planFiles.length > 0) {
-        const firstPf = planFiles[0];
+        const weaPf = planFiles.find((pf) => {
+          const n = (pf.original_name || '').toLowerCase();
+          return pf.organization_code === 'wea' || pf.organization_short === 'WEA' || n.includes('wea') || n.includes('front-end');
+        });
+        const firstPf = weaPf || planFiles[0];
         setSelectedPlanFileId(String(firstPf.id));
         const firstPlanModules = flatPlans.filter((p) => String(p.file_id) === String(firstPf.id));
         if (firstPlanModules.length > 0) {
@@ -606,10 +612,23 @@ export default function CalendarGenerator() {
       const isPlanFrontEnd = targetName.includes('front-end') || targetName.includes('frontend') || planFileLower.includes('front-end') || planFileLower.includes('frontend') || orgCode === 'wea';
       const isPlanNetwork = targetName.includes('ქსელ') || targetName.includes('სისტემ') || planFileLower.includes('ქსელ') || planFileLower.includes('სისტემ') || orgCode === '22_skola';
 
+      // კანდიდატი Word ფაილების მკაცრი ფილტრაცია ორგანიზაციის მიხედვით
+      const candidateWordFiles = wordFilesList.filter((wf) => {
+        const wOrg = wf.organization_code || '';
+        const wShort = wf.organization_short || '';
+        const wName = normStr(wf.original_name);
+        const isWfWea = wOrg === 'wea' || wShort === 'WEA' || wName.includes('front-end') || wName.includes('wea') || wName.includes('დანართი');
+        const isWf22 = wOrg === '22_skola' || wShort === '22 სკოლა';
+
+        if (isPlanFrontEnd) return isWfWea && !isWf22;
+        if (isPlanNetwork) return isWf22 && !isWfWea;
+        return true;
+      });
+
       let bestMatch = null;
       let highestScore = 0;
 
-      for (const wf of wordFilesList) {
+      for (const wf of candidateWordFiles) {
         const wName = normStr(wf.original_name);
         const wOrg = wf.organization_code || '';
         const isWfFrontEnd = wName.includes('front-end') || wName.includes('frontend') || wOrg === 'wea';
@@ -982,7 +1001,7 @@ export default function CalendarGenerator() {
           formative_assessment: oc.assessment_methods || '',
           summative_assessment: oc.assessment_direction
             ? `${oc.assessment_direction}${oc.assessment_methods ? ' / ' + oc.assessment_methods : ''}`
-            : oc.assessment_methods || '',
+            : (oc.assessment_methods || 'პრაქტიკული დავალება'),
           environment_resources: envFromDb,
         };
       });
@@ -1005,6 +1024,34 @@ export default function CalendarGenerator() {
       setModuleLoading(false);
     }
   };
+
+  // Step 1: მიმდინარე სასწავლო გეგმის ორგანიზაციის მიხედვით გაფილტრული Word ფაილები
+  const displayedWordFiles = useMemo(() => {
+    if (showAllWordFiles) return wordModuleFiles;
+    const planP = dbPlans.find((p) => String(p.file_id) === String(selectedPlanFileId));
+    const pOrg = planP?.organization_code || organizationCode || '';
+    const pFile = (planP?.file_name || '').toLowerCase();
+    const isWea = pOrg === 'wea' || pFile.includes('wea') || pFile.includes('front-end');
+    const is22 = pOrg === '22_skola' || pFile.includes('22') || pFile.includes('ქსელ');
+
+    if (isWea) {
+      return wordModuleFiles.filter((wf) => {
+        const wOrg = wf.organization_code || '';
+        const wShort = wf.organization_short || '';
+        const wName = (wf.original_name || '').toLowerCase();
+        return wOrg === 'wea' || wShort === 'WEA' || wName.includes('front-end') || wName.includes('frontend') || wName.includes('wea') || wName.includes('დანართი');
+      });
+    }
+    if (is22) {
+      return wordModuleFiles.filter((wf) => {
+        const wOrg = wf.organization_code || '';
+        const wShort = wf.organization_short || '';
+        const wName = (wf.original_name || '').toLowerCase();
+        return wOrg === '22_skola' || wShort === '22 სკოლა' || (!wName.includes('front-end') && !wName.includes('wea'));
+      });
+    }
+    return wordModuleFiles;
+  }, [wordModuleFiles, showAllWordFiles, selectedPlanFileId, dbPlans, organizationCode]);
 
   const handlePlanChange = (planKey) => {
     setSelectedPlanKey(planKey);
@@ -1607,7 +1654,7 @@ export default function CalendarGenerator() {
             { column: 1, rowSpan: 1, colSpan: 1, text: '', style: baseCell({ textAlign: 'center' }) },
             { column: 2, rowSpan: 1, colSpan: 1, text: '', style: baseCell({ textAlign: 'center' }) },
             { column: 3, rowSpan: 1, colSpan: 1, text: oc.outcome_name, style: baseCell({ textAlign: 'left' }) },
-            { column: 4, rowSpan: 1, colSpan: 1, text: oc.criteria, style: baseCell({ textAlign: 'left', verticalAlign: 'top' }) },
+            { column: 4, rowSpan: 1, colSpan: 1, text: includeCriteriaInTable ? (oc.criteria || '') : '', style: baseCell({ textAlign: 'left', verticalAlign: 'top' }) },
             { column: 5, rowSpan: 1, colSpan: 1, text: '0', style: baseCell({ textAlign: 'center' }) },
             { column: 6, rowSpan: 1, colSpan: 1, text: '', style: baseCell({ textAlign: 'center' }) },
             { column: 7, rowSpan: 1, colSpan: 1, text: '', style: baseCell({ textAlign: 'center' }) },
@@ -1636,7 +1683,7 @@ export default function CalendarGenerator() {
               column: 4,
               rowSpan: spanCount,
               colSpan: 1,
-              text: oc.criteria,
+              text: includeCriteriaInTable ? (oc.criteria || '') : '',
               style: baseCell({ textAlign: 'left', verticalAlign: 'top', fontSize: '10.0pt' }),
             });
           }
@@ -1821,6 +1868,7 @@ export default function CalendarGenerator() {
     pairMerges,
     deductEvalFromContact,
     hideIndependentInRows,
+    includeCriteriaInTable,
   ]);
 
   // ============================================================================
@@ -1939,6 +1987,11 @@ export default function CalendarGenerator() {
             : `სწავლის შედეგი ${pendingMergedOutcomes.map((i) => i.number).join('-')}\n` +
               pendingMergedOutcomes.map((i) => `${i.number}. ${i.name}`).join('\n');
 
+        const summativeMethod =
+          [...new Set(pendingMergedOutcomes.map((i) => i.method).filter(Boolean))].join(';\n') ||
+          oc.summative_assessment ||
+          'პრაქტიკული დავალება';
+
         rows.push({
           type: 'evaluation',
           cells: [
@@ -1947,9 +2000,9 @@ export default function CalendarGenerator() {
             { text: evalLabel, style: baseCell({ textAlign: 'left', fontWeight: 'bold' }) },
             { text: '', style: baseCell({ textAlign: 'center' }) },
             { text: '', style: baseCell({ textAlign: 'center' }) },
-            { text: String(combinedEvalHours), style: baseCell({ textAlign: 'center', fontWeight: 'bold' }) },
+            { text: combinedEvalHours > 0 ? String(combinedEvalHours) : (grandTotalEvaluation > 0 ? String(grandTotalEvaluation) : ''), style: baseCell({ textAlign: 'center', fontWeight: 'bold' }) },
             { text: '', style: baseCell({ textAlign: 'center' }) },
-            { text: pendingMergedOutcomes[0]?.method || 'პრაქტიკული დავალება', style: baseCell({ textAlign: 'center', fontSize: '9pt' }) },
+            { text: summativeMethod, style: baseCell({ textAlign: 'center', fontSize: '9.5pt', fontWeight: 'bold' }) },
             { text: '', style: baseCell({ textAlign: 'center' }) },
             { text: '', style: baseCell({ textAlign: 'center' }) },
           ],
@@ -2807,9 +2860,19 @@ export default function CalendarGenerator() {
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                  3) მოდულის აღწერა (Word ფაილი — შედეგები და თემატიკა):
-                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600, color: '#334155' }}>
+                    3) მოდულის აღწერა (Word ფაილი — შედეგები და თემატიკა):
+                  </label>
+                  <label style={{ fontSize: '11.5px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={showAllWordFiles}
+                      onChange={(e) => setShowAllWordFiles(e.target.checked)}
+                    />
+                    <span>ყველა ორგანიზაცია</span>
+                  </label>
+                </div>
                 <select
                   value={selectedFileId}
                   onChange={(e) => handleLoadOutcomesFromWordFile(e.target.value)}
@@ -2824,7 +2887,7 @@ export default function CalendarGenerator() {
                   }}
                 >
                   <option value="">-- Word ფაილის გარეშე (მხოლოდ გეგმის საათები) --</option>
-                  {wordModuleFiles.map((wf) => (
+                  {displayedWordFiles.map((wf) => (
                     <option key={wf.id} value={String(wf.id)}>
                       [{wf.organization_short || 'Word'}] {wf.original_name}
                     </option>
@@ -3497,6 +3560,16 @@ export default function CalendarGenerator() {
                 />
                 <span>
                   <strong>დამოუკიდებელი საათები არ გამოჩნდეს კალენდარულში</strong> (მხოლოდ საკონტაქტო და შეფასება)
+                </span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#334155', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={includeCriteriaInTable}
+                  onChange={(e) => setIncludeCriteriaInTable(e.target.checked)}
+                />
+                <span>
+                  <strong>შესრულების კრიტერიუმების შევსება ცხრილში</strong> (გამორთულია: შაბლონი არ შეივსება კრიტერიუმებით — დარჩება ცარიელი, მხოლოდ სათაურები, თემატიკა და საათები)
                 </span>
               </label>
             </div>
@@ -4368,6 +4441,17 @@ export default function CalendarGenerator() {
                   📑 ფორმა 2 (10 სვეტი - აკადემია)
                 </button>
               </div>
+
+              {selectedTemplate === 'template1' && (
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12.5px', color: '#475569', cursor: 'pointer', background: '#f8fafc', padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1' }}>
+                  <input
+                    type="checkbox"
+                    checked={includeCriteriaInTable}
+                    onChange={(e) => setIncludeCriteriaInTable(e.target.checked)}
+                  />
+                  <span>კრიტერიუმების შევსება</span>
+                </label>
+              )}
 
               <button
                 onClick={handleSaveCalendarToDb}

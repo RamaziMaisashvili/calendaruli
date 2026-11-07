@@ -557,14 +557,17 @@ export default function CalendarGenerator() {
       setModuleStatus(mType);
       setCredits(mCredits);
 
-      if (orgCode === '22_skola') {
+      const planNameLower = (mTitle || '').toLowerCase();
+      const planFileLower = (p.file_name || '').toLowerCase();
+
+      if (planNameLower.includes('front-end') || planNameLower.includes('frontend') || planFileLower.includes('front-end') || planFileLower.includes('frontend') || orgCode === 'wea') {
+        setProgramName('Front-end დეველოპმენტი');
+        setLocation(orgName || 'შპს ,,მსოფლიო განათლების აკადემია“');
+      } else if (planNameLower.includes('ქსელ') || planNameLower.includes('სისტემ') || planFileLower.includes('ქსელ') || planFileLower.includes('სისტემ') || orgCode === '22_skola') {
         setProgramName('კომპიუტერული ქსელი და სისტემები');
         setLocation('ქ. ქუთაისი, განათლების ქუჩა 64');
-      } else if (orgCode === 'wea') {
-        setProgramName('Front-end დეველოპმენტი');
-        setLocation(orgName);
       } else {
-        setProgramName(p.file_name?.replace(/\.[^/.]+$/, '') || '');
+        setProgramName(p.file_name?.replace(/\.[^/.]+$/, '') || 'საგანმანათლებლო პროგრამა');
         setLocation(orgName);
       }
 
@@ -600,15 +603,68 @@ export default function CalendarGenerator() {
       const normStr = (s) => (s || '').replace(/\s+/g, ' ').trim().toLowerCase();
       const targetName = normStr(mTitle);
       const targetReg = normStr(regNum);
+      const isPlanFrontEnd = targetName.includes('front-end') || targetName.includes('frontend') || planFileLower.includes('front-end') || planFileLower.includes('frontend') || orgCode === 'wea';
+      const isPlanNetwork = targetName.includes('ქსელ') || targetName.includes('სისტემ') || planFileLower.includes('ქსელ') || planFileLower.includes('სისტემ') || orgCode === '22_skola';
 
-      const matchedWord = wordFilesList.find((wf) => {
+      let bestMatch = null;
+      let highestScore = 0;
+
+      for (const wf of wordFilesList) {
         const wName = normStr(wf.original_name);
-        if (targetReg && targetReg.length > 3 && wName.includes(targetReg)) return true;
-        if (targetName && targetName.length > 3 && (wName.includes(targetName) || targetName.includes(wName))) return true;
-        const words = targetName.split(' ').filter((w) => w.length > 4);
-        if (words.length > 0 && words.filter((w) => wName.includes(w)).length >= 2) return true;
-        return false;
-      });
+        const wOrg = wf.organization_code || '';
+        const isWfFrontEnd = wName.includes('front-end') || wName.includes('frontend') || wOrg === 'wea';
+        const isWfNetwork = wName.includes('ქსელ') || wName.includes('სისტემ') || wOrg === '22_skola';
+
+        // მკაცრი შემოწმება: არასოდეს დავაკავშიროთ Front-end მოდული ქსელების მოდულთან ან პირიქით!
+        if (isPlanFrontEnd && isWfNetwork && !isWfFrontEnd) continue;
+        if (isPlanNetwork && isWfFrontEnd && !isWfNetwork) continue;
+
+        let score = 0;
+
+        // 1. ერთი და იგივე ორგანიზაცია
+        if (orgCode && wOrg && orgCode === wOrg) {
+          score += 40;
+        }
+
+        // 2. სარეგისტრაციო კოდის ზუსტი დამთხვევა
+        if (targetReg && targetReg.length >= 3 && wName.includes(targetReg)) {
+          score += 100;
+        }
+
+        // 3. სათაურის დამთხვევა
+        if (targetName && targetName.length > 3) {
+          if (wName === targetName) {
+            score += 90;
+          } else if (wName.includes(targetName) || targetName.includes(wName)) {
+            score += 60;
+          }
+        }
+
+        // 4. სპეციფიკური დარგობრივი საკვანძო სიტყვები
+        const domainKeywords = ['front-end', 'frontend', 'ქსელ', 'სისტემ', 'აპარატურ', 'მარკირება', 'სტილ', 'ვებ', 'javascript', 'react'];
+        for (const kw of domainKeywords) {
+          if (targetName.includes(kw) && wName.includes(kw)) {
+            score += 35;
+          }
+        }
+
+        // 5. მნიშვნელოვანი სიტყვების თანხვედრა (ზოგადი სიტყვების გამორიცხვით)
+        const stopWords = ['დარგობრივი', 'ინგლისური', 'ენა', 'მოდული', 'საფუძვლები', 'შესავალი', 'და', 'როგორც', 'მისი', 'ნაწილი'];
+        const words = targetName.split(' ').filter((w) => w.length > 3 && !stopWords.includes(w));
+        for (const w of words) {
+          if (wName.includes(w)) {
+            score += 15;
+          }
+        }
+
+        if (score > highestScore) {
+          highestScore = score;
+          bestMatch = wf;
+        }
+      }
+
+      // დამთხვევა მიიღება მხოლოდ იმ შემთხვევაში, თუ ქულა >= 30-ია
+      const matchedWord = highestScore >= 30 ? bestMatch : null;
 
       let loadedOutcomes = [];
       let extractedMeta = {};
@@ -703,6 +759,87 @@ export default function CalendarGenerator() {
       }
     } catch (err) {
       setError(err.message || 'მოდულის მონაცემების ჩატვირთვა ვერ მოხერხდა');
+    } finally {
+      setModuleLoading(false);
+    }
+  };
+
+  // როდესაც მომხმარებელი ნაბიჯი 1-ში ხელით ირჩევს ან ცვლის Word მოდულის ფაილს
+  const handleLoadOutcomesFromWordFile = async (fileIdStr) => {
+    setSelectedFileId(fileIdStr);
+    const p = dbPlans.find((item) => item._key === selectedPlanKey);
+    const planContactTotal = Number(p?.hours_contact || 0);
+    const planEvalTotal = Number(p?.hours_evaluation || 0);
+
+    if (!fileIdStr) {
+      setOutcomesConfig([
+        {
+          id: 1,
+          outcome_number: '1',
+          outcome_name: p?.module_name || moduleTitle || 'სწავლის შედეგი 1',
+          raw_hours_contact: planContactTotal || 20,
+          hours_contact: planContactTotal || 20,
+          hours_independent: 0,
+          hours_evaluation: planEvalTotal || 0,
+          topicsList: [p?.module_name || moduleTitle || 'მოდულის თემატიკა'],
+          criteria: '',
+          teaching_methods: 'ლექცია დემონსტრირებით;\nპრაქტიკული სამუშაო.',
+          environment_resources: '',
+          summative_assessment: 'პრაქტიკული დავალება',
+        },
+      ]);
+      setPairMerges({});
+      return;
+    }
+
+    setModuleLoading(true);
+    try {
+      const modData = await api.getFileModule(Number(fileIdStr));
+      const loadedOutcomes = modData?.outcomes || [];
+      const docElements = modData?.doc_elements || [];
+      const extractedMeta = extractMetaFromDocElements(docElements);
+      if (extractedMeta.prerequisite) setPrerequisite(extractedMeta.prerequisite);
+
+      if (loadedOutcomes.length > 0) {
+        const sumWordContact = loadedOutcomes.reduce((acc, oc) => acc + Number(oc.hours_contact || 0), 0);
+        const sumWordEval = loadedOutcomes.reduce((acc, oc) => acc + Number(oc.hours_evaluation || 0), 0);
+
+        const mappedOutcomes = loadedOutcomes.map((oc, idx) => {
+          const parsedTopics = splitTopicsText(oc.topics);
+          let rawContact = Number(oc.hours_contact || 0);
+          let rawEval = Number(oc.hours_evaluation || 0);
+
+          if (sumWordContact === 0 && planContactTotal > 0) {
+            const basePerOc = Math.floor(planContactTotal / loadedOutcomes.length);
+            const rem = planContactTotal % loadedOutcomes.length;
+            rawContact = basePerOc + (idx < rem ? 1 : 0);
+          }
+          if (sumWordEval === 0 && planEvalTotal > 0) {
+            const baseEval = Math.floor(planEvalTotal / loadedOutcomes.length);
+            const remE = planEvalTotal % loadedOutcomes.length;
+            rawEval = baseEval + (idx < remE ? 1 : 0);
+          }
+
+          return {
+            id: oc.id || idx + 1,
+            outcome_number: oc.outcome_number || String(idx + 1),
+            outcome_name: oc.outcome_name || `სწავლის შედეგი ${idx + 1}`,
+            raw_hours_contact: rawContact,
+            hours_contact: rawContact,
+            hours_independent: Number(oc.hours_independent || 0),
+            hours_evaluation: rawEval,
+            topicsList: parsedTopics.length > 0 ? parsedTopics : (oc.topics ? [oc.topics] : [oc.outcome_name || `თემა ${idx + 1}`]),
+            criteria: oc.criteria || '',
+            teaching_methods: extractedMeta.teachingMethods || 'ლექცია დემონსტრირებით;\nპრაქტიკული სამუშაო;\nდისკუსია/დებატები;\nჯგუფური მუშაობა.',
+            environment_resources: extractedMeta.envResources || '',
+            summative_assessment: oc.assessment_direction || 'პრაქტიკული დავალება',
+          };
+        });
+
+        setOutcomesConfig(mappedOutcomes);
+      }
+    } catch (err) {
+      setError(err.message || 'Word მოდულის ჩატვირთვა ვერ მოხერხდა');
     } finally {
       setModuleLoading(false);
     }
@@ -2649,7 +2786,7 @@ export default function CalendarGenerator() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                  2) აირჩიეთ მოდული:
+                  2) აირჩიეთ მოდული (სასწავლო გეგმიდან):
                 </label>
                 <select
                   value={selectedPlanKey}
@@ -2671,7 +2808,38 @@ export default function CalendarGenerator() {
 
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
-                  3) მასწავლებელი / მოდულის განმახორციელებელი:
+                  3) მოდულის აღწერა (Word ფაილი — შედეგები და თემატიკა):
+                </label>
+                <select
+                  value={selectedFileId}
+                  onChange={(e) => handleLoadOutcomesFromWordFile(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    border: selectedFileId ? '1px solid #2563eb' : '1px solid #cbd5e1',
+                    background: selectedFileId ? '#f8fafc' : '#ffffff',
+                    fontSize: '13.5px',
+                    fontWeight: selectedFileId ? 600 : 400,
+                  }}
+                >
+                  <option value="">-- Word ფაილის გარეშე (მხოლოდ გეგმის საათები) --</option>
+                  {wordModuleFiles.map((wf) => (
+                    <option key={wf.id} value={String(wf.id)}>
+                      [{wf.organization_short || 'Word'}] {wf.original_name}
+                    </option>
+                  ))}
+                </select>
+                <div style={{ marginTop: '4px', fontSize: '11.5px', color: selectedFileId ? '#15803d' : '#64748b' }}>
+                  {selectedFileId
+                    ? '✓ სწავლის შედეგები დაკავშირებულია ამ Word მოდულთან'
+                    : 'ℹ️ შედეგები აღებულია გეგმიდან (შეგიძლიათ აირჩიოთ Word ფაილი ზემოთ)'}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: '#334155', marginBottom: '6px' }}>
+                  4) მასწავლებელი / მოდულის განმახორციელებელი:
                 </label>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   <input
